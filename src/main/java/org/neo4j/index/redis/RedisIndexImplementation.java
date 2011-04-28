@@ -63,4 +63,10 @@ public class RedisIndexImplementation extends AbstractIndexImplementation
     {
         return true;
     }
+    
+    @Override
+    public RedisDataSource dataSource()
+    {
+        return (RedisDataSource) super.dataSource();
+    }
 }

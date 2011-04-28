@@ -20,21 +20,23 @@
 package org.neo4j.index.redis;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
 import javax.transaction.xa.XAException;
 
 import org.neo4j.index.base.AbstractCommand;
 import org.neo4j.index.base.IndexIdentifier;
+import org.neo4j.index.base.keyvalue.KeyValueCommand;
 import org.neo4j.index.base.keyvalue.KeyValueTransaction;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 
+import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
 class RedisTransaction extends KeyValueTransaction
 {
-    private Map<IndexIdentifier, Transaction> txs;
+    private Jedis redisResource;
+    private Transaction transaction;
     
     RedisTransaction( int identifier, XaLogicalLog xaLog,
         RedisDataSource dataSource )
@@ -43,50 +45,92 @@ class RedisTransaction extends KeyValueTransaction
     }
     
     @Override
+    protected RedisDataSource getDataSource()
+    {
+        return (RedisDataSource) super.getDataSource();
+    }
+    
+    @Override
     protected void doPrepare() throws XAException
     {
         super.doPrepare();
-        RedisDataSource dataSource = (RedisDataSource) getDataSource();
-//        dataSource.getWriteLock();
-        txs = new HashMap<IndexIdentifier, Transaction>();
-        try
+        RedisDataSource dataSource = getDataSource();
+        redisResource = dataSource.acquireResource();
+        transaction = redisResource.multi();
+        for ( Map.Entry<IndexIdentifier, Collection<AbstractCommand>> entry : getCommands().entrySet() )
         {
-            for ( Map.Entry<IndexIdentifier, Collection<AbstractCommand>> entry : getCommands().entrySet() )
+            IndexIdentifier identifier = entry.getKey();
+            
+            for ( AbstractCommand command : entry.getValue() )
             {
-                IndexIdentifier identifier = entry.getKey();
-                TxDataBoth txData = getTxData( identifier );
+                String indexName = identifier.getIndexName();
+                if ( command instanceof KeyValueCommand.CreateIndexCommand )
+                {
+                    dataSource.getIndexStore().setIfNecessary( identifier.getEntityType(),
+                            indexName, ((KeyValueCommand.CreateIndexCommand) command).getConfig() );
+                    continue;
+                }
                 
-                // TODO start a MULTI and push the commands to redis
-                Transaction tx = dataSource.beginTx();
-                txs.put( identifier, tx );
+                KeyValueCommand kvCommand = (KeyValueCommand) command;
+                String redisKey = dataSource.formRedisKey( indexName,
+                        kvCommand.getKey(), kvCommand.getValue() );
+                long id = kvCommand.getEntityId();
+                
+                // TODO Make the command apply instead of this if-else-thingie
+                if ( kvCommand instanceof KeyValueCommand.AddCommand )
+                {
+                    transaction.sadd( redisKey, "" + id );
+                    
+                    // For future deletion of the index
+                    transaction.sadd( indexName, redisKey );
+                }
+                else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
+                {
+                    transaction.srem( redisKey, "" + id );
+                    
+                    // For future deletion of the index
+                    transaction.srem( indexName, redisKey );
+                }
+//                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
+//                {
+//                    // TODO this doesn't really scale... getting all the keys for an
+//                    // index can potentially eat up the entire heap.
+//                    for ( String indexKey : redisResource.smembers( indexName ) )
+//                    {
+//                        transaction.del( indexKey );
+//                    }
+//                }
             }
-            closeTxData();
         }
-        finally
-        {
-//            dataSource.releaseWriteLock();
-        }
+        closeTxData();
     }
     
     @Override
     protected void doCommit()
     {
-        // TODO COMMIT in redis
-        for ( Transaction tx : txs.values() )
+        try
         {
-            // TODO analyze result?
-            tx.exec();
+            // TODO COMMIT in redis
+            transaction.exec();
+        }
+        finally
+        {
+            getDataSource().releaseResource( redisResource );
         }
     }
     
     @Override
     protected void doRollback()
     {
-        super.doRollback();
-        // TODO ROLLBACK in redis
-        for ( Transaction tx : txs.values() )
+        try
         {
-            tx.discard();
+            super.doRollback();
+            // TODO ROLLBACK in redis
+            transaction.discard();
+        }
+        finally
+        {
+            getDataSource().releaseResource( redisResource );
         }
     }
 }

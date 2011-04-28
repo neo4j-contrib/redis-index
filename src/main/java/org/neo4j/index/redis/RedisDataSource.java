@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.util.Map;
 
+import org.apache.commons.pool.impl.GenericObjectPool;
 import org.neo4j.index.base.IndexDataSource;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaCommand;
@@ -32,7 +33,7 @@ import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 import org.neo4j.kernel.impl.transaction.xaframework.XaTransaction;
 
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Transaction;
+import redis.clients.jedis.JedisPool;
 
 /**
  * An {@link XaDataSource} optimized for the {@link LuceneIndexProvider}.
@@ -40,10 +41,11 @@ import redis.clients.jedis.Transaction;
  */
 public class RedisDataSource extends IndexDataSource
 {
+    static final char KEY_DELIMITER = ':';
     static final String NAME = "redis";
     static final byte[] BRANCH_ID = "redis".getBytes();
     
-    private final Jedis db;
+    private final JedisPool db;
     
     /**
      * Constructs this data source.
@@ -58,15 +60,15 @@ public class RedisDataSource extends IndexDataSource
         super( params );
         
         // TODO read config somehow... not just "localhost"
-        // TODO hmm, multiple indexes?
-        db = new Jedis( "localhost" );
+        GenericObjectPool.Config jedisPoolConfig = new GenericObjectPool.Config();
+        db = new JedisPool( jedisPoolConfig, "localhost" );
     }
 
     @Override
     protected void actualClose()
     {
         // TODO shutdown redis
-        db.shutdown();
+        db.destroy();
     }
     
     protected XaTransaction createTransaction( int identifier,
@@ -88,8 +90,19 @@ public class RedisDataSource extends IndexDataSource
         // TODO
     }
 
-    public Transaction beginTx()
+    public Jedis acquireResource()
     {
-        return db.multi();
+        return db.getResource();
+    }
+    
+    public void releaseResource( Jedis resource )
+    {
+        db.returnResource( resource );
+    }
+
+    public String formRedisKey( String indexName, String key, String value )
+    {
+        return new StringBuilder( indexName ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
+                .append( value ).toString();
     }
 }
