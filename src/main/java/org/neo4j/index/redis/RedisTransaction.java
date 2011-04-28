@@ -21,6 +21,7 @@ package org.neo4j.index.redis;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 import javax.transaction.xa.XAException;
 
@@ -91,15 +92,25 @@ class RedisTransaction extends KeyValueTransaction
                     // For future deletion of the index
                     transaction.srem( indexName, redisKey );
                 }
-//                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
-//                {
-//                    // TODO this doesn't really scale... getting all the keys for an
-//                    // index can potentially eat up the entire heap.
-//                    for ( String indexKey : redisResource.smembers( indexName ) )
-//                    {
-//                        transaction.del( indexKey );
-//                    }
-//                }
+                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand ) {
+                    // TODO this doesn't really scale... getting all the keys for an
+                    // index can potentially eat up the entire heap. Consider replacing with a list.
+
+                    // acquire a separate redis connection to read the all the index keys.
+                    // using the current redisResource is not possible because of the ongoing transaction
+                    Jedis readOnlyRedisResource = null;
+                    Set<String> members;
+                    try {
+                        readOnlyRedisResource = getDataSource().acquireResource();
+                        members = readOnlyRedisResource.smembers(indexName);
+                    } finally {
+                        getDataSource().releaseResource(readOnlyRedisResource);
+                    }
+
+                    for (String indexKey : members) {
+                        transaction.del(indexKey);
+                    }
+                }
             }
         }
         closeTxData();
