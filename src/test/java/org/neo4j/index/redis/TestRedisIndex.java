@@ -626,4 +626,28 @@ public class TestRedisIndex
         node2.delete();
         finishTx( true );
     }
+    
+    @Test
+    public void multipleIndexesSameTransaction() throws Exception
+    {
+        Index<Node> nodes = nodeIndex( "multi" );
+        Index<Relationship> rels = relationshipIndex( "multi" );
+        
+        Node from = graphDb.createNode();
+        Node to = graphDb.createNode();
+        Relationship rel = from.createRelationshipTo( to, TEST_TYPE );
+        nodes.add( from, "name", "from" );
+        nodes.add( to, "name", "to" );
+        rels.add( rel, "type", rel.getType().name() );
+        assertEquals( from, nodes.get( "name", "from" ).getSingle() );
+        assertEquals( to, nodes.get( "name", "to" ).getSingle() );
+        assertEquals( rel, rels.get( "type", TEST_TYPE.name() ).getSingle() );
+        restartTx();
+        assertEquals( from, nodes.get( "name", "from" ).getSingle() );
+        assertEquals( to, nodes.get( "name", "to" ).getSingle() );
+        assertEquals( rel, rels.get( "type", TEST_TYPE.name() ).getSingle() );
+        
+        nodes.delete();
+        rels.delete();
+    }
 }
