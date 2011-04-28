@@ -25,6 +25,7 @@ import java.util.Set;
 
 import javax.transaction.xa.XAException;
 
+import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.AbstractCommand;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
@@ -84,6 +85,13 @@ class RedisTransaction extends KeyValueTransaction
                     
                     // For future deletion of the index
                     transaction.sadd( indexName, redisKey );
+
+                    // For relationship queries
+                    if (kvCommand.getIndexIdentifier().getEntityType() == Relationship.class)
+                    {
+                        transaction.sadd( "start:" + kvCommand.getStartNode(), "" + id );
+                        transaction.sadd( "end:" + kvCommand.getEndNode(), "" + id );
+                    }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
                 {
