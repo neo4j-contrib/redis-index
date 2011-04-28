@@ -110,6 +110,8 @@ class RedisTransaction extends KeyValueTransaction
                     for (String indexKey : members) {
                         transaction.del(indexKey);
                     }
+
+                    transaction.del(indexName);
                 }
             }
         }
