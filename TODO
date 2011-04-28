@@ -9,3 +9,4 @@ Sorting?
 Performance tests
 Redis configuration: host, port, user, pwd
 Different types of indexes: multiple, one-to-one, super-fast-ignore-delete-and-the-other-removal-methods
+Support compound queries with a syntax similar to what's used in Lucene index
