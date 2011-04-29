@@ -20,6 +20,7 @@
 package org.neo4j.index.redis;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -27,6 +28,7 @@ import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.PropertyContainer;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.index.IndexHits;
+import org.neo4j.index.base.IndexBaseXaConnection;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.keyvalue.KeyValueIndex;
 
@@ -45,6 +47,18 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         return (RedisIndexImplementation) super.getProvider();
     }
     
+    public void remove( T entity, String key )
+    {
+        IndexBaseXaConnection connection = getConnection();
+        connection.remove( this, entity, key, null );
+    }
+    
+    public void remove( T entity )
+    {
+        IndexBaseXaConnection connection = getConnection();
+        connection.remove( this, entity, null, null );
+    }
+    
     @Override
     public IndexHits<T> get(String key, Object value) {
         return read(new EntityGetCallback(key, value));
@@ -52,79 +66,93 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
     }
 
     protected abstract T idToEntity( Long id );
-
-    class EntityGetCallback extends ReadCallback {
-
-        protected EntityGetCallback(String key, Object value) {
-            super(key, value);
-        }
-
-        @Override
-        protected void update(List<Long> ids) {
-        RedisDataSource dataSource = getProvider().dataSource();
-        Jedis resource = dataSource.acquireResource();
-        try
+    
+    abstract class AbstractReadCallback extends ReadCallback
+    {
+        protected AbstractReadCallback( String key, Object value )
         {
-            String redisKey = dataSource.formRedisKey( getIdentifier().getIndexName(),
-                    key, value.toString() );
-            // TODO Return lazy iterator instead of converting all values here and now?
-            Set<String> idsFromRedis = resource.smembers( redisKey );
-            for ( String stringId : idsFromRedis )
+            super( key, value );
+        }
+        
+        @Override
+        protected void update( List<Long> ids, Collection<Long> except )
+        {
+            RedisDataSource dataSource = getProvider().dataSource();
+            Jedis resource = dataSource.acquireResource();
+            try
             {
-                ids.add( Long.valueOf( stringId ) );
+                // TODO Return lazy iterator instead of converting all values
+                // here and now?
+                Set<String> idsFromRedis = getIdsFromRedis( dataSource, resource );
+                for ( String stringId : idsFromRedis )
+                {
+                    Long id = Long.valueOf( stringId );
+                    if ( !except.contains( id ) )
+                    {
+                        ids.add( id );
+                    }
+                }
+            }
+            finally
+            {
+                dataSource.releaseResource( resource );
             }
         }
-        finally
-        {
-            dataSource.releaseResource( resource );
-        }
 
+        protected abstract Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource );
+    }
+
+    class EntityGetCallback extends AbstractReadCallback
+    {
+        protected EntityGetCallback( String key, Object value )
+        {
+            super( key, value );
+        }
+        
+        @Override
+        protected Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource )
+        {
+            String redisKey = dataSource.formRedisKeyForKeyValue( getIdentifier()
+                    .getIndexName(), key, value.toString() );
+            return resource.smembers( redisKey );
         }
     }
 
-    class RelationshipGetCallback extends ReadCallback {
-
-        protected final long startNode;
-        protected final long endNode;
+    class RelationshipGetCallback extends AbstractReadCallback
+    {
+        private final long startNode;
+        private final long endNode;
 
         // TODO handle null values?
-        protected RelationshipGetCallback(String key, Object value, Node startNode, Node endNode) {
-            super(key, value);
-            this.startNode = startNode!= null ? startNode.getId() : -1;
-            this.endNode = endNode!= null ? endNode.getId() : -1;
+        protected RelationshipGetCallback( String key, Object value, Node startNode, Node endNode )
+        {
+            super( key, value );
+            this.startNode = startNode != null ? startNode.getId() : -1;
+            this.endNode = endNode != null ? endNode.getId() : -1;
         }
-
+        
         @Override
-        protected void update(List<Long> ids) {
-        RedisDataSource dataSource = getProvider().dataSource();
-        Jedis resource = dataSource.acquireResource();
-        try
+        protected Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource )
         {
-            List<String> keys = new ArrayList<String>(3);
-            keys.add(dataSource.formRedisKey(getIdentifier().getIndexName(),
-                    key, value.toString()));
-            if (startNode != -1) {
-                keys.add(dataSource.formRedisStartNodeKey(getIdentifier().getIndexName(), startNode));
-            }
-            if (endNode != -1) {
-                keys.add(dataSource.formRedisEndNodeKey(getIdentifier().getIndexName(), endNode));
-            }
-
-            // TODO Return lazy iterator instead of converting all values here and now?
-            Set<String> idsFromRedis = resource.sinter(keys.toArray(new String[keys.size()]));
-            for ( String stringId : idsFromRedis )
+            List<String> keys = new ArrayList<String>( 3 );
+            keys.add( dataSource.formRedisKeyForKeyValue( getIdentifier().getIndexName(), key,
+                    value.toString() ) );
+            if ( startNode != -1 )
             {
-                ids.add( Long.valueOf( stringId ) );
+                keys.add( dataSource.formRedisStartNodeKey( getIdentifier().getIndexName(),
+                        startNode ) );
             }
-        }
-        finally
-        {
-            dataSource.releaseResource( resource );
-        }
+            if ( endNode != -1 )
+            {
+                keys.add( dataSource.formRedisEndNodeKey( getIdentifier().getIndexName(),
+                        endNode ) );
+            }
 
+            // TODO Return lazy iterator instead of converting all values
+            // here and now?
+            return resource.sinter( keys.toArray( new String[keys.size()] ) );
         }
     }
-
     
     static class NodeIndex extends RedisIndex<Node>
     {

@@ -665,7 +665,8 @@ public class TestRedisIndex
     }
 
     @Test
-    public void relationshipIndex () throws Exception {
+    public void relationshipIndex() throws Exception
+    {
         RelationshipIndex rels = relationshipIndex("relationships");
         beginTx();
         Node node1 = graphDb.createNode(),
@@ -685,5 +686,93 @@ public class TestRedisIndex
         IndexHits<Relationship> hits = rels.get(key, value, node1, node3);
         assertEquals(1, hits.size());
         assertEquals(hits.getSingle().getId(), relationship1.getId());
+    }
+
+    @SuppressWarnings( "unchecked" )
+    private <T extends PropertyContainer> void testRemoveWithoutKey(
+            EntityCreator<T> creator, Index<T> index ) throws Exception
+    {
+        String key1 = "key1";
+        String key2 = "key2";
+        String value = "value";
+        
+        beginTx();
+        T entity1 = creator.create();
+        index.add( entity1, key1, value );
+        index.add( entity1, key2, value );
+        T entity2 = creator.create();
+        index.add( entity2, key1, value );
+        index.add( entity2, key2, value );
+        restartTx();
+        
+        assertThat( index.get( key1, value ), contains( entity1, entity2 ) );
+        assertThat( index.get( key2, value ), contains( entity1, entity2 ) );
+        index.remove( entity1, key2 );
+        assertThat( index.get( key1, value ), contains( entity1, entity2 ) );
+        assertThat( index.get( key2, value ), contains( entity2 ) );
+        index.add( entity1, key2, value );
+        for ( int i = 0; i < 2; i++ )
+        {
+            assertThat( index.get( key1, value ), contains( entity1, entity2 ) );
+            assertThat( index.get( key2, value ), contains( entity1, entity2 ) );
+            restartTx();
+        }
+    }
+    
+    @Test
+    public void testRemoveWithoutKeyNodes() throws Exception
+    {
+        testRemoveWithoutKey( NODE_CREATOR, nodeIndex( "remove-wo-k" ) ); 
+    }
+    
+    @Test
+    public void testRemoveWithoutKeyRelationships() throws Exception
+    {
+        testRemoveWithoutKey( RELATIONSHIP_CREATOR, relationshipIndex( "remove-wo-k" ) );
+    }
+    
+    @SuppressWarnings( "unchecked" )
+    private <T extends PropertyContainer> void testRemoveWithoutKeyValue(
+            EntityCreator<T> creator, Index<T> index ) throws Exception
+    {
+        String key1 = "key1";
+        String value1 = "value1";
+        String key2 = "key2";
+        String value2 = "value2";
+        
+        beginTx();
+        T entity1 = creator.create();
+        index.add( entity1, key1, value1 );
+        index.add( entity1, key2, value2 );
+        T entity2 = creator.create();
+        index.add( entity2, key1, value1 );
+        index.add( entity2, key2, value2 );
+        restartTx();
+        
+        assertThat( index.get( key1, value1 ), contains( entity1, entity2 ) );
+        assertThat( index.get( key2, value2 ), contains( entity1, entity2 ) );
+        index.remove( entity1 );
+        assertThat( index.get( key1, value1 ), contains( entity2 ) );
+        assertThat( index.get( key2, value2 ), contains( entity2 ) );
+        index.add( entity1, key1, value1 );
+        
+        for ( int i = 0; i < 2; i++ )
+        {
+            assertThat( index.get( key1, value1 ), contains( entity1, entity2 ) );
+            assertThat( index.get( key2, value2 ), contains( entity2 ) );
+            restartTx();
+        }
+    }
+    
+    @Test
+    public void testRemoveWithoutKeyValueNodes() throws Exception
+    {
+        testRemoveWithoutKeyValue( NODE_CREATOR, nodeIndex( "remove-wo-kv" ) ); 
+    }
+    
+    @Test
+    public void testRemoveWithoutKeyValueRelationships() throws Exception
+    {
+        testRemoveWithoutKeyValue( RELATIONSHIP_CREATOR, relationshipIndex( "remove-wo-kv" ) );
     }
 }

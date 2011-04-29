@@ -25,6 +25,8 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.Map;
 
 import org.apache.commons.pool.impl.GenericObjectPool;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.IndexDataSource;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaCommand;
@@ -41,7 +43,17 @@ import redis.clients.jedis.JedisPool;
  */
 public class RedisDataSource extends IndexDataSource
 {
+    /**
+     * The normal delimiter between parts in a redis key, f.ex:
+     * indexName:key:value
+     */
     static final char KEY_DELIMITER = ':';
+    
+    /**
+     * Delimiter to use between a "normal" part and a part that represents
+     * an entity ({@link Node}/{@link Relationship}) id just to avoid collitions
+     * with keys only consisting of normal parts.
+     */
     static final char ID_DELIMITER = '|';
     static final String NAME = "redis";
     static final byte[] BRANCH_ID = "redis".getBytes();
@@ -105,17 +117,32 @@ public class RedisDataSource extends IndexDataSource
         db.returnResource( resource );
     }
 
-    public String formRedisKey( String indexName, String key, String value )
+    public String formRedisKeyForKeyValue( String indexName, String key, String value )
     {
         return new StringBuilder( indexName ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
                 .append( value ).toString();
     }
-
-    public String formRedisStartNodeKey( String indexName, long id) {
-        return new StringBuilder( indexName ).append(KEY_DELIMITER).append("start").append(ID_DELIMITER).append(id).toString();
+    
+    public String formRedisKeyForEntityAndKeyRemoval( String indexName, String key, long id )
+    {
+        return new StringBuilder( indexName ).append( KEY_DELIMITER )
+                .append( key ).append( ID_DELIMITER ).append( id ).toString();
+    }
+    
+    public String formRedisKeyForEntityRemoval( String indexName, long id )
+    {
+        return new StringBuilder( indexName ).append( ID_DELIMITER ).append( id ).toString();
+    }
+    
+    public String formRedisStartNodeKey( String indexName, long id)
+    {
+        return new StringBuilder( indexName ).append(KEY_DELIMITER)
+                .append("start").append(ID_DELIMITER).append(id).toString();
     }
 
-    public String formRedisEndNodeKey(String indexName, long id) {
-        return new StringBuilder(indexName).append(KEY_DELIMITER).append("end").append(ID_DELIMITER).append(id).toString();
+    public String formRedisEndNodeKey(String indexName, long id)
+    {
+        return new StringBuilder(indexName).append(KEY_DELIMITER)
+                .append("end").append(ID_DELIMITER).append(id).toString();
     }
 }
