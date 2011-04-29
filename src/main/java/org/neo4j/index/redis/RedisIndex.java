@@ -19,6 +19,7 @@
  */
 package org.neo4j.index.redis;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -80,6 +81,50 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
 
         }
     }
+
+    class RelationshipGetCallback extends ReadCallback {
+
+        protected final long startNode;
+        protected final long endNode;
+
+        // TODO handle null values?
+        protected RelationshipGetCallback(String key, Object value, Node startNode, Node endNode) {
+            super(key, value);
+            this.startNode = startNode!= null ? startNode.getId() : -1;
+            this.endNode = endNode!= null ? endNode.getId() : -1;
+        }
+
+        @Override
+        protected void update(List<Long> ids) {
+        RedisDataSource dataSource = getProvider().dataSource();
+        Jedis resource = dataSource.acquireResource();
+        try
+        {
+            List<String> keys = new ArrayList<String>(3);
+            keys.add(dataSource.formRedisKey(getIdentifier().getIndexName(),
+                    key, value.toString()));
+            if (startNode != -1) {
+                keys.add(dataSource.formRedisStartNodeKey(getIdentifier().getIndexName(), startNode));
+            }
+            if (endNode != -1) {
+                keys.add(dataSource.formRedisEndNodeKey(getIdentifier().getIndexName(), endNode));
+            }
+
+            // TODO Return lazy iterator instead of converting all values here and now?
+            Set<String> idsFromRedis = resource.sinter(keys.toArray(new String[keys.size()]));
+            for ( String stringId : idsFromRedis )
+            {
+                ids.add( Long.valueOf( stringId ) );
+            }
+        }
+        finally
+        {
+            dataSource.releaseResource( resource );
+        }
+
+        }
+    }
+
     
     static class NodeIndex extends RedisIndex<Node>
     {
@@ -111,7 +156,7 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         public IndexHits<Relationship> get( String key, Object valueOrNull, Node startNodeOrNull,
                 Node endNodeOrNull )
         {
-            throw new UnsupportedOperationException();
+            return read(new RelationshipGetCallback(key, valueOrNull, startNodeOrNull, endNodeOrNull));
         }
 
         public IndexHits<Relationship> query( String key, Object queryOrQueryObjectOrNull,

@@ -42,6 +42,7 @@ import redis.clients.jedis.JedisPool;
 public class RedisDataSource extends IndexDataSource
 {
     static final char KEY_DELIMITER = ':';
+    static final char ID_DELIMITER = '|';
     static final String NAME = "redis";
     static final byte[] BRANCH_ID = "redis".getBytes();
     
@@ -108,5 +109,13 @@ public class RedisDataSource extends IndexDataSource
     {
         return new StringBuilder( indexName ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
                 .append( value ).toString();
+    }
+
+    public String formRedisStartNodeKey( String indexName, long id) {
+        return new StringBuilder( indexName ).append(KEY_DELIMITER).append("start").append(ID_DELIMITER).append(id).toString();
+    }
+
+    public String formRedisEndNodeKey(String indexName, long id) {
+        return new StringBuilder(indexName).append(KEY_DELIMITER).append("end").append(ID_DELIMITER).append(id).toString();
     }
 }

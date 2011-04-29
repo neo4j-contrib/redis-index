@@ -47,6 +47,7 @@ import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.index.Index;
+import org.neo4j.graphdb.index.IndexHits;
 import org.neo4j.graphdb.index.RelationshipIndex;
 import org.neo4j.helpers.collection.IteratorUtil;
 import org.neo4j.helpers.collection.MapUtil;
@@ -661,5 +662,28 @@ public class TestRedisIndex
         
         nodes.delete();
         rels.delete();
+    }
+
+    @Test
+    public void relationshipIndex () throws Exception {
+        RelationshipIndex rels = relationshipIndex("relationships");
+        beginTx();
+        Node node1 = graphDb.createNode(),
+        node2 = graphDb.createNode(),
+        node3 = graphDb.createNode();
+
+        Relationship relationship1 = node1.createRelationshipTo(node3, TEST_TYPE);
+        Relationship relationship2 = node2.createRelationshipTo(node3, TEST_TYPE);
+
+        String key = "key1";
+        String value = "value1";
+
+        rels.add(relationship1, key, value);
+        rels.add(relationship2, key, value);
+        commitTx();
+
+        IndexHits<Relationship> hits = rels.get(key, value, node1, node3);
+        assertEquals(1, hits.size());
+        assertEquals(hits.getSingle().getId(), relationship1.getId());
     }
 }

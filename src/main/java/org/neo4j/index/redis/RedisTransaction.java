@@ -88,8 +88,8 @@ class RedisTransaction extends KeyValueTransaction
                     // For relationship queries
                     if (kvCommand.getIndexIdentifier().getEntityType() == Relationship.class)
                     {
-                        transaction.sadd( "start:" + kvCommand.getStartNode(), "" + id );
-                        transaction.sadd( "end:" + kvCommand.getEndNode(), "" + id );
+                        transaction.sadd( dataSource.formRedisStartNodeKey(indexName, kvCommand.getStartNode()), "" + id );
+                        transaction.sadd( dataSource.formRedisEndNodeKey(indexName, kvCommand.getEndNode()), "" + id );
                     }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
