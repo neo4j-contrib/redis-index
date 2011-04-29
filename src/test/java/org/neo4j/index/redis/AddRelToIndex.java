@@ -20,8 +20,7 @@
 package org.neo4j.index.redis;
 
 import static org.neo4j.graphdb.DynamicRelationshipType.withName;
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
+import static org.neo4j.index.redis.Neo4jTestCase.relIndex;
 
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -37,7 +36,7 @@ public class AddRelToIndex
         String path = args[0];
         String indexName = "myIndex";
         GraphDatabaseService db = new EmbeddedGraphDatabase( path );
-        Index<Relationship> index = db.index().forRelationships( indexName, stringMap( "provider", SERVICE_NAME ) );
+        Index<Relationship> index = relIndex( db, indexName );
         Transaction tx = db.beginTx();
         Node node = db.createNode();
         Relationship relationship = db.getReferenceNode().createRelationshipTo( node, withName( "KNOWS" ) );

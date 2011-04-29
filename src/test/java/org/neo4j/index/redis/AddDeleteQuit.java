@@ -19,8 +19,7 @@
  */
 package org.neo4j.index.redis;
 
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
+import static org.neo4j.index.redis.Neo4jTestCase.nodeIndex;
 
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -37,7 +36,7 @@ public class AddDeleteQuit
     public static void main( String[] args )
     {
         GraphDatabaseService db = new EmbeddedGraphDatabase( args[0] );
-        Index<Node> index = db.index().forNodes( "index", stringMap( "provider", SERVICE_NAME ) );
+        Index<Node> index = nodeIndex( db, "index" );
         Transaction tx = db.beginTx();
         try
         {

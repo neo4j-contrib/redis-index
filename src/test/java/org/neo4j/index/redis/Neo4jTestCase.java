@@ -19,19 +19,24 @@ package org.neo4j.index.redis;
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.neo4j.helpers.collection.MapUtil.stringMap;
+import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.index.Index;
+import org.neo4j.graphdb.index.RelationshipIndex;
 import org.neo4j.kernel.EmbeddedGraphDatabase;
 
 public abstract class Neo4jTestCase
@@ -40,6 +45,8 @@ public abstract class Neo4jTestCase
     private static File dbPath = new File( basePath, "neo4j-db" );
     private static GraphDatabaseService graphDb;
     private Transaction tx;
+    
+    private static final Map<String, String> REDIS_CONFIG = stringMap( "provider", SERVICE_NAME );
 
     @BeforeClass
     public static void setUpDb() throws Exception
@@ -62,6 +69,44 @@ public abstract class Neo4jTestCase
 //            finishTx( true );
 //        }
 //    }
+    
+    protected static Index<Node> nodeIndex( GraphDatabaseService db, String name )
+    {
+        // Create/delete it because of the nature of redis... it's a server
+        // and its indexes are there even after a test and we've cleared the db
+        Transaction tx = db.beginTx();
+        try
+        {
+            Index<Node> index = db.index().forNodes( name, REDIS_CONFIG );
+            index.delete();
+            tx.success();
+        }
+        finally
+        {
+            tx.finish();
+        }
+        return db.index().forNodes( name, REDIS_CONFIG );
+    }
+    
+    protected static RelationshipIndex relIndex( GraphDatabaseService db, String name )
+    {
+        // Create/delete it because of the nature of redis... it's a server
+        // and its indexes are there even after a test and we've cleared the db
+        // Create/delete it because of the nature of redis... it's a server
+        // and its indexes are there even after a test and we've cleared the db
+        Transaction tx = db.beginTx();
+        try
+        {
+            RelationshipIndex index = db.index().forRelationships( name, REDIS_CONFIG );
+            index.delete();
+            tx.success();
+        }
+        finally
+        {
+            tx.finish();
+        }
+        return db.index().forRelationships( name, REDIS_CONFIG );
+    }
     
     protected boolean manageMyOwnTxFinish()
     {

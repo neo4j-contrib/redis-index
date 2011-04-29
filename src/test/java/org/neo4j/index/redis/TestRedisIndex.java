@@ -36,7 +36,6 @@ import java.util.Map;
 
 import org.junit.After;
 import org.junit.AfterClass;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -96,7 +95,7 @@ public class TestRedisIndex
         }
     }
 
-    @Before
+//    @Before
     public void beginTx()
     {
         if ( tx == null )
@@ -180,19 +179,10 @@ public class TestRedisIndex
         }
     }
     
-    private Index<Node> nodeIndex( String name )
-    {
-        return graphDb.index().forNodes( name, MapUtil.stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ) );
-    }
-    
-    private RelationshipIndex relationshipIndex( String name )
-    {
-        return graphDb.index().forRelationships( name, MapUtil.stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ) );
-    }
-    
     private <T extends PropertyContainer> void makeSureAdditionsCanBeRead(
             Index<T> index, EntityCreator<T> entityCreator )
     {
+        beginTx();
         String key = "name";
         String value = "Mattias";
         assertThat( index.get( key, value ).getSingle(), is( nullValue() ) );
@@ -214,6 +204,16 @@ public class TestRedisIndex
         restartTx();
         assertThat( index.get( key, value ), contains( entity1, entity2 ) );
         index.delete();
+    }
+    
+    private Index<Node> nodeIndex( String name )
+    {
+        return Neo4jTestCase.nodeIndex( graphDb, name );
+    }
+    
+    private RelationshipIndex relationshipIndex( String name )
+    {
+        return Neo4jTestCase.relIndex( graphDb, name );
     }
 
     @Test
@@ -240,6 +240,7 @@ public class TestRedisIndex
         String name = "index-that-may-exist";
         assertFalse( graphDb.index().existsForNodes( name ) );
         nodeIndex( name );
+        beginTx();
         assertTrue( graphDb.index().existsForNodes( name ) );
 
         assertFalse( graphDb.index().existsForRelationships( name ) );
@@ -250,6 +251,7 @@ public class TestRedisIndex
     private void makeSureAdditionsCanBeRemoved( boolean restartTx )
     {
         Index<Node> index = nodeIndex( "some-index" + restartTx );
+        beginTx();
         String key = "name";
         String value = "Mattias";
         assertNull( index.get( key, value ).getSingle() );
@@ -277,6 +279,7 @@ public class TestRedisIndex
     private void makeSureSomeAdditionsCanBeRemoved( boolean restartTx )
     {
         Index<Node> index = nodeIndex( "some-index-2-" + restartTx );
+        beginTx();
         String key1 = "name";
         String key2 = "title";
         String value1 = "Mattias";
@@ -328,6 +331,7 @@ public class TestRedisIndex
     private void makeSureThereCanBeMoreThanOneValueForAKeyAndEntity( boolean restartTx )
     {
         Index<Node> index = nodeIndex( "many-values-" + restartTx );
+        beginTx();
         String key = "name";
         String value1 = "Lucene";
         String value2 = "Index";
@@ -356,6 +360,7 @@ public class TestRedisIndex
     public void makeSureArrayValuesAreSupported()
     {
         Index<Node> index = nodeIndex( "arrays" );
+        beginTx();
         String key = "name";
         String value1 = "Lucene";
         String value2 = "Index";
@@ -386,6 +391,7 @@ public class TestRedisIndex
     private <T extends PropertyContainer> void doSomeRandomUseCaseTestingWithExactIndex(
             Index<T> index, EntityCreator<T> creator )
     {
+        beginTx();
         String name = "name";
         String mattias = "Mattias Persson";
         String title = "title";
@@ -428,7 +434,7 @@ public class TestRedisIndex
         beginTx();
         index.remove( entity1, title, hacker );
         index.remove( entity1, name, mattias );
-        index.delete();
+//        index.delete();
         commitTx();
     }
 
@@ -448,6 +454,7 @@ public class TestRedisIndex
             Index<T> index,
             EntityCreator<T> creator )
     {
+        beginTx();
         T entity1 = creator.create();
         T entity2 = creator.create();
 
@@ -477,6 +484,7 @@ public class TestRedisIndex
     private <T extends PropertyContainer> void testInsertionSpeed(
             Index<T> index, EntityCreator<T> creator )
     {
+        beginTx();
         long t = System.currentTimeMillis();
         for ( int i = 0; i < 1000000; i++ )
         {
@@ -537,6 +545,7 @@ public class TestRedisIndex
     {
         String indexName = "my-index-1";
         Index<Node> nodeIndex = nodeIndex( indexName );
+        beginTx();
         assertEquals( indexName, nodeIndex.getName() );
         assertEquals( stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ),
                 graphDb.index().getConfiguration( nodeIndex ) );
@@ -545,10 +554,11 @@ public class TestRedisIndex
     @Test
     public void makeSureYouCanRemoveFromRelationshipIndex()
     {
+        RelationshipIndex index = relationshipIndex( "rel-index" );
+        beginTx();
         Node n1 = graphDb.createNode();
         Node n2 = graphDb.createNode();
         Relationship r = n1.createRelationshipTo( n2, DynamicRelationshipType.withName( "foo" ) );
-        RelationshipIndex index = relationshipIndex( "rel-index" );
         String key = "bar";
         index.remove( r, key, "value" );
         index.add( r, key, "otherValue" );
@@ -564,6 +574,7 @@ public class TestRedisIndex
     {
         Index<Node> nodeIndex = nodeIndex( "type-test" );
         Index<Relationship> relIndex = relationshipIndex( "type-test" );
+        beginTx();
         assertEquals( Node.class, nodeIndex.getEntityType() );
         assertEquals( Relationship.class, relIndex.getEntityType() );
     }
@@ -585,6 +596,7 @@ public class TestRedisIndex
         }
         catch ( IllegalArgumentException e ) { /* Good*/ }
 
+        beginTx();
         String key = "my-key";
         String value = "my-value";
         String newValue = "my-new-value";
@@ -632,6 +644,7 @@ public class TestRedisIndex
         Index<Node> nodes = nodeIndex( "multi" );
         Index<Relationship> rels = relationshipIndex( "multi" );
         
+        beginTx();
         Node from = graphDb.createNode();
         Node to = graphDb.createNode();
         Relationship rel = from.createRelationshipTo( to, TEST_TYPE );

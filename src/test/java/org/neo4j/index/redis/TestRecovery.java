@@ -21,8 +21,8 @@ package org.neo4j.index.redis;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
+import static org.neo4j.index.redis.Neo4jTestCase.nodeIndex;
+import static org.neo4j.index.redis.Neo4jTestCase.relIndex;
 
 import java.io.File;
 import java.lang.Thread.State;
@@ -36,7 +36,6 @@ import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.index.Index;
-import org.neo4j.graphdb.index.RelationshipIndex;
 import org.neo4j.kernel.EmbeddedGraphDatabase;
 
 /**
@@ -54,16 +53,6 @@ public class TestRecovery
         String path = getDbPath();
         Neo4jTestCase.deleteFileOrDirectory( new File( path ) );
         return new EmbeddedGraphDatabase( path );
-    }
-    
-    private Index<Node> nodeIndex( GraphDatabaseService db, String name )
-    {
-        return db.index().forNodes( name, stringMap( "provider", SERVICE_NAME ) );
-    }
-    
-    private RelationshipIndex relIndex( GraphDatabaseService db, String name )
-    {
-        return db.index().forRelationships( name, stringMap( "provider", SERVICE_NAME ) );
     }
     
     @Test
