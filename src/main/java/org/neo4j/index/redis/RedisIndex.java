@@ -112,8 +112,7 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         @Override
         protected Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource )
         {
-            String redisKey = dataSource.formRedisKeyForKeyValue( getIdentifier()
-                    .getIndexName(), key, value.toString() );
+            String redisKey = dataSource.formRedisKeyForKeyValue( getIdentifier(), key, value.toString() );
             return resource.smembers( redisKey );
         }
     }
@@ -135,16 +134,16 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         protected Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource )
         {
             List<String> keys = new ArrayList<String>( 3 );
-            keys.add( dataSource.formRedisKeyForKeyValue( getIdentifier().getIndexName(), key,
+            keys.add( dataSource.formRedisKeyForKeyValue( getIdentifier(), key,
                     value.toString() ) );
             if ( startNode != -1 )
             {
-                keys.add( dataSource.formRedisStartNodeKey( getIdentifier().getIndexName(),
+                keys.add( dataSource.formRedisStartNodeKey( getIdentifier(),
                         startNode ) );
             }
             if ( endNode != -1 )
             {
-                keys.add( dataSource.formRedisEndNodeKey( getIdentifier().getIndexName(),
+                keys.add( dataSource.formRedisEndNodeKey( getIdentifier(),
                         endNode ) );
             }
 

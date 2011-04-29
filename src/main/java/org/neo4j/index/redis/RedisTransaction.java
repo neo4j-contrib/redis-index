@@ -86,22 +86,22 @@ class RedisTransaction extends KeyValueTransaction
                 // TODO Make the command apply itself instead of this if-else-thingie
                 if ( kvCommand instanceof KeyValueCommand.AddCommand )
                 {
-                    addEntityKeyValue( dataSource, indexName, kvCommand,
+                    addEntityKeyValue( dataSource, identifier, kvCommand,
                             commandKey, commandValue, id );
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
                 {
                     if ( commandKey == null && commandValue == null )
                     {
-                        deleteAllForEntity( dataSource, indexName, id );
+                        deleteAllForEntity( dataSource, identifier, id );
                     }
                     else if ( commandValue == null )
                     {
-                        deleteAllForEntityAndKey( dataSource, indexName, commandKey, id );
+                        deleteAllForEntityAndKey( dataSource, identifier, commandKey, id );
                     }
                     else
                     {
-                        deleteEntityKeyValue( dataSource, indexName, commandKey, commandValue, id );
+                        deleteEntityKeyValue( dataSource, identifier, commandKey, commandValue, id );
                     }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
@@ -120,18 +120,19 @@ class RedisTransaction extends KeyValueTransaction
         closeTxData();
     }
 
-    private void addEntityKeyValue( RedisDataSource dataSource, String indexName,
+    private void addEntityKeyValue( RedisDataSource dataSource, IndexIdentifier identifier,
             KeyValueCommand kvCommand, String commandKey, String commandValue, long id )
     {
-        String keyValueKey = dataSource.formRedisKeyForKeyValue( indexName, commandKey, commandValue );
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( indexName, commandKey, id );
-        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( indexName, id );
+        String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, commandKey, commandValue );
+        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
+        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
         
         transaction.sadd( keyValueKey, "" + id );
         transaction.sadd( entityAndKeyRemovalKey, commandValue );
         transaction.sadd( entityRemovalKey, commandKey );
         
         // For future deletion of the index
+        String indexName = identifier.getIndexName();
         transaction.sadd( indexName, keyValueKey );
         transaction.sadd( indexName, entityAndKeyRemovalKey );
         transaction.sadd( indexName, entityRemovalKey );
@@ -139,16 +140,16 @@ class RedisTransaction extends KeyValueTransaction
         // For relationship queries
         if (kvCommand.getIndexIdentifier().getEntityType() == Relationship.class)
         {
-            transaction.sadd( dataSource.formRedisStartNodeKey(indexName, kvCommand.getStartNode()), "" + id );
-            transaction.sadd( dataSource.formRedisEndNodeKey(indexName, kvCommand.getEndNode()), "" + id );
+            transaction.sadd( dataSource.formRedisStartNodeKey(identifier, kvCommand.getStartNode()), "" + id );
+            transaction.sadd( dataSource.formRedisEndNodeKey(identifier, kvCommand.getEndNode()), "" + id );
         }
     }
 
-    private void deleteEntityKeyValue( RedisDataSource dataSource, String indexName,
+    private void deleteEntityKeyValue( RedisDataSource dataSource, IndexIdentifier identifier,
             String commandKey, String commandValue, long id )
     {
-        String keyValueKey = dataSource.formRedisKeyForKeyValue( indexName, commandKey, commandValue );
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( indexName, commandKey, id );
+        String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, commandKey, commandValue );
+        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
         transaction.srem( keyValueKey, "" + id );
         transaction.srem( entityAndKeyRemovalKey, commandValue );
         
@@ -157,32 +158,32 @@ class RedisTransaction extends KeyValueTransaction
         // transaction.srem( entityRemovalKey, commandKey );
         
         // For future deletion of the index
-        transaction.srem( indexName, keyValueKey );
+        transaction.srem( identifier.getIndexName(), keyValueKey );
     }
 
-    private void deleteAllForEntity( RedisDataSource dataSource, String indexName, long id )
+    private void deleteAllForEntity( RedisDataSource dataSource, IndexIdentifier identifier, long id )
     {
-        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( indexName, id );
+        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
         Set<String> keys = getMembersFromOutsideTransaction( entityRemovalKey );
         for ( String key : keys )
         {
-            deleteAllForEntityAndKey( dataSource, indexName, key, id );
+            deleteAllForEntityAndKey( dataSource, identifier, key, id );
         }
         transaction.del( entityRemovalKey );
-        transaction.srem( indexName, entityRemovalKey );
+        transaction.srem( identifier.getIndexName(), entityRemovalKey );
     }
 
-    private void deleteAllForEntityAndKey( RedisDataSource dataSource, String indexName, String commandKey,
+    private void deleteAllForEntityAndKey( RedisDataSource dataSource, IndexIdentifier identifier, String commandKey,
             long id )
     {
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( indexName, commandKey, id );
+        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
         for ( String value : getMembersFromOutsideTransaction( entityAndKeyRemovalKey ) )
         {
-            String keyToRemove = dataSource.formRedisKeyForKeyValue( indexName, commandKey, value );
+            String keyToRemove = dataSource.formRedisKeyForKeyValue( identifier, commandKey, value );
             transaction.srem( keyToRemove, "" + id );
         }
         transaction.del( entityAndKeyRemovalKey );
-        transaction.srem( indexName, entityAndKeyRemovalKey );
+        transaction.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
     }
 
     private Set<String> getMembersFromOutsideTransaction( String indexName )

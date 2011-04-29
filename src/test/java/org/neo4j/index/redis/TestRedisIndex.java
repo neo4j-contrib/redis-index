@@ -613,7 +613,6 @@ public class TestRedisIndex
     public void testSomeStuff() throws Exception
     {
         String indexName = "" + currentTimeMillis();
-        System.out.println( indexName );
         Index<Node> index = graphDb.index().forNodes( indexName, stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ) );
         
         beginTx();
@@ -774,5 +773,27 @@ public class TestRedisIndex
     public void testRemoveWithoutKeyValueRelationships() throws Exception
     {
         testRemoveWithoutKeyValue( RELATIONSHIP_CREATOR, relationshipIndex( "remove-wo-kv" ) );
+    }
+    
+    @Test
+    public void nodeAndRelationshipIndexWithSameName() throws Exception
+    {
+        String indexName = "same-index";
+        Index<Node> nodeIndex = nodeIndex( indexName );
+        RelationshipIndex relIndex = relationshipIndex( indexName );
+        
+        beginTx();
+        String key = "key";
+        String value = "value";
+        Node node = graphDb.createNode();
+        Relationship rel = node.createRelationshipTo( graphDb.createNode(), TEST_TYPE );
+        nodeIndex.add( node, key, value );
+        relIndex.add( rel, key, value );
+        
+        assertThat( nodeIndex.get( key, value ), contains( node ) );
+        assertThat( relIndex.get( key, value ), contains( rel ) );
+        commitTx();
+        assertThat( nodeIndex.get( key, value ), contains( node ) );
+        assertThat( relIndex.get( key, value ), contains( rel ) );
     }
 }

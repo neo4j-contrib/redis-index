@@ -28,6 +28,7 @@ import org.apache.commons.pool.impl.GenericObjectPool;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.IndexDataSource;
+import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaDataSource;
@@ -116,33 +117,39 @@ public class RedisDataSource extends IndexDataSource
     {
         db.returnResource( resource );
     }
-
-    public String formRedisKeyForKeyValue( String indexName, String key, String value )
+    
+    private StringBuilder redisKeyStart( IndexIdentifier identifier )
     {
-        return new StringBuilder( indexName ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
+        char entityType = identifier.getEntityType().equals( Node.class ) ? 'n' : 'r';
+        return new StringBuilder( entityType ).append( KEY_DELIMITER ).append( identifier.getIndexName() );
+    }
+
+    public String formRedisKeyForKeyValue( IndexIdentifier identifier, String key, String value )
+    {
+        return redisKeyStart( identifier ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
                 .append( value ).toString();
     }
     
-    public String formRedisKeyForEntityAndKeyRemoval( String indexName, String key, long id )
+    public String formRedisKeyForEntityAndKeyRemoval( IndexIdentifier identifier, String key, long id )
     {
-        return new StringBuilder( indexName ).append( KEY_DELIMITER )
+        return redisKeyStart( identifier ).append( KEY_DELIMITER )
                 .append( key ).append( ID_DELIMITER ).append( id ).toString();
     }
     
-    public String formRedisKeyForEntityRemoval( String indexName, long id )
+    public String formRedisKeyForEntityRemoval( IndexIdentifier identifier, long id )
     {
-        return new StringBuilder( indexName ).append( ID_DELIMITER ).append( id ).toString();
+        return redisKeyStart( identifier ).append( ID_DELIMITER ).append( id ).toString();
     }
     
-    public String formRedisStartNodeKey( String indexName, long id)
+    public String formRedisStartNodeKey( IndexIdentifier identifier, long id)
     {
-        return new StringBuilder( indexName ).append(KEY_DELIMITER)
+        return redisKeyStart( identifier ).append(KEY_DELIMITER)
                 .append("start").append(ID_DELIMITER).append(id).toString();
     }
 
-    public String formRedisEndNodeKey(String indexName, long id)
+    public String formRedisEndNodeKey(IndexIdentifier identifier, long id)
     {
-        return new StringBuilder(indexName).append(KEY_DELIMITER)
+        return redisKeyStart( identifier ).append(KEY_DELIMITER)
                 .append("end").append(ID_DELIMITER).append(id).toString();
     }
 }
