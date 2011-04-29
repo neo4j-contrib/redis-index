@@ -32,6 +32,7 @@ import static org.neo4j.helpers.collection.MapUtil.stringMap;
 import static org.neo4j.index.redis.Contains.contains;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.After;
@@ -63,7 +64,11 @@ public class TestRedisIndex
     {
         String storeDir = "target/var/db";
         Neo4jTestCase.deleteFileOrDirectory( new File( storeDir ) );
-        graphDb = new EmbeddedGraphDatabase( storeDir );
+        Map<String, String> params = new HashMap<String, String>();
+        params.put("index.redis.password", "123");
+        params.put("index.redis.timeout", "3000");
+        params.put("index.redis.pool.maxIdle", "5");
+        graphDb = new EmbeddedGraphDatabase( storeDir, params );
     }
 
     @AfterClass

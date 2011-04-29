@@ -29,6 +29,7 @@ import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.IndexDataSource;
 import org.neo4j.index.base.IndexIdentifier;
+import org.neo4j.index.base.ParamsUtil;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaDataSource;
@@ -39,7 +40,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 /**
- * An {@link XaDataSource} optimized for the {@link LuceneIndexProvider}.
+ * An {@link XaDataSource} optimized for the {@link RedisIndexProvider}.
  * This class is public because the XA framework requires it.
  */
 public class RedisDataSource extends IndexDataSource
@@ -49,7 +50,7 @@ public class RedisDataSource extends IndexDataSource
      * indexName:key:value
      */
     static final char KEY_DELIMITER = ':';
-    
+
     /**
      * Delimiter to use between a "normal" part and a part that represents
      * an entity ({@link Node}/{@link Relationship}) id just to avoid collitions
@@ -58,28 +59,60 @@ public class RedisDataSource extends IndexDataSource
     static final char ID_DELIMITER = '|';
     static final String NAME = "redis";
     static final byte[] BRANCH_ID = "redis".getBytes();
-    
+
+    static final String REDIS_PREFIX = "index.redis.";
+    static final String REDIS_POOL_PREFIX = REDIS_PREFIX + "pool.";
+    static final String DEFAULT_HOST = "localhost";
+    static final int DEFAULT_PORT = 6379;
+    static final int DEFAULT_TIMEOUT = 2000;
+
+
     private JedisPool db;
-    
+
     /**
      * Constructs this data source.
-     * 
+     *
      * @param params XA parameters.
      * @throws InstantiationException if the data source couldn't be
      * instantiated
      */
-    public RedisDataSource( Map<Object,Object> params ) 
+    public RedisDataSource( Map<Object,Object> params )
         throws InstantiationException
     {
         super( params );
     }
-    
+
     @Override
-    protected void initializeBeforeLogicalLog( Map<?, ?> params )
-    {
-        // TODO read config somehow... not just "localhost"
+    protected void initializeBeforeLogicalLog( Map<?, ?> params ) {
+
+        // jedis parameters
+        String host = ParamsUtil.getString(params, REDIS_PREFIX + "host", DEFAULT_HOST);
+        Integer port = ParamsUtil.getInt(params, REDIS_PREFIX + "port", DEFAULT_PORT);
+        Integer timeout = ParamsUtil.getInt(params, REDIS_PREFIX + "timeout", DEFAULT_TIMEOUT);
+        String password = ParamsUtil.getString(params, REDIS_PREFIX + "password");
+
+        // connection pool parameters
+        Integer poolMaxIdle = ParamsUtil.getInt(params, REDIS_POOL_PREFIX + "maxIdle");
+        Integer poolMinIdle = ParamsUtil.getInt(params, REDIS_POOL_PREFIX + "minIdle");
+        Integer poolMaxActive = ParamsUtil.getInt(params, REDIS_POOL_PREFIX + "maxActive");
+        Long poolMaxWait = ParamsUtil.getLong(params, REDIS_POOL_PREFIX + "maxWait");
+
         GenericObjectPool.Config jedisPoolConfig = new GenericObjectPool.Config();
-        db = new JedisPool( jedisPoolConfig, "localhost" );
+        if (poolMaxIdle != null) {
+            jedisPoolConfig.maxIdle = poolMaxIdle;
+        }
+        if (poolMinIdle != null) {
+            jedisPoolConfig.minIdle = poolMinIdle;
+        }
+        if (poolMaxActive != null) {
+            jedisPoolConfig.maxActive = poolMaxActive;
+        }
+        if (poolMaxWait != null) {
+            jedisPoolConfig.maxWait = poolMaxWait;
+        }
+
+        db = new JedisPool(jedisPoolConfig, host, port, timeout, password);
+        //TODO check that redis is accessible. For the moment tests through NPE if it's not
     }
 
     @Override
@@ -88,7 +121,7 @@ public class RedisDataSource extends IndexDataSource
         // TODO shutdown redis
         db.destroy();
     }
-    
+
     protected XaTransaction createTransaction( int identifier,
         XaLogicalLog logicalLog )
     {
@@ -112,12 +145,12 @@ public class RedisDataSource extends IndexDataSource
     {
         return db.getResource();
     }
-    
+
     public void releaseResource( Jedis resource )
     {
         db.returnResource( resource );
     }
-    
+
     private StringBuilder redisKeyStart( IndexIdentifier identifier )
     {
         char entityType = identifier.getEntityType().equals( Node.class ) ? 'n' : 'r';
@@ -129,18 +162,18 @@ public class RedisDataSource extends IndexDataSource
         return redisKeyStart( identifier ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
                 .append( value ).toString();
     }
-    
+
     public String formRedisKeyForEntityAndKeyRemoval( IndexIdentifier identifier, String key, long id )
     {
         return redisKeyStart( identifier ).append( KEY_DELIMITER )
                 .append( key ).append( ID_DELIMITER ).append( id ).toString();
     }
-    
+
     public String formRedisKeyForEntityRemoval( IndexIdentifier identifier, long id )
     {
         return redisKeyStart( identifier ).append( ID_DELIMITER ).append( id ).toString();
     }
-    
+
     public String formRedisStartNodeKey( IndexIdentifier identifier, long id)
     {
         return redisKeyStart( identifier ).append(KEY_DELIMITER)
