@@ -45,9 +45,21 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
     }
     
     @Override
-    protected void getFromDb( List<Long> ids, String key, Object value )
-    {
-        // TODO get from redis and add to "ids" list
+    public IndexHits<T> get(String key, Object value) {
+        return read(new EntityGetCallback(key, value));
+
+    }
+
+    protected abstract T idToEntity( Long id );
+
+    class EntityGetCallback extends ReadCallback {
+
+        protected EntityGetCallback(String key, Object value) {
+            super(key, value);
+        }
+
+        @Override
+        protected void update(List<Long> ids) {
         RedisDataSource dataSource = getProvider().dataSource();
         Jedis resource = dataSource.acquireResource();
         try
@@ -65,9 +77,9 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         {
             dataSource.releaseResource( resource );
         }
+
+        }
     }
-    
-    protected abstract T idToEntity( Long id );
     
     static class NodeIndex extends RedisIndex<Node>
     {
