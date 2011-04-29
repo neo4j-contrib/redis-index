@@ -134,9 +134,13 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         @Override
         protected Set<String> getIdsFromRedis( RedisDataSource dataSource, Jedis resource )
         {
+            //TODO validate input
             List<String> keys = new ArrayList<String>( 3 );
+            if( key != null)
+            {
             keys.add( dataSource.formRedisKeyForKeyValue( getIdentifier().getIndexName(), key,
                     value.toString() ) );
+            }
             if ( startNode != -1 )
             {
                 keys.add( dataSource.formRedisStartNodeKey( getIdentifier().getIndexName(),
