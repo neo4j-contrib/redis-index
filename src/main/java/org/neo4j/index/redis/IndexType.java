@@ -62,7 +62,6 @@ public enum IndexType
                 removeEntityKey( pipeline, neo4jTransaction, dataSource, identifier, key, id );
             }
             pipeline.del( entityRemovalKey );
-            pipeline.srem( identifier.getIndexName(), entityRemovalKey );
         }
 
         @Override
@@ -76,7 +75,6 @@ public enum IndexType
                 pipeline.srem( keyToRemove, "" + id );
             }
             pipeline.del( entityAndKeyRemovalKey );
-            pipeline.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
         }
 
         @Override
@@ -87,13 +85,10 @@ public enum IndexType
             String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, key, id );
             pipeline.srem( keyValueKey, "" + id );
             pipeline.srem( entityAndKeyRemovalKey, value );
-            
+
             // TODO We cannot remove the key from the key set since we don't know
             // if there are more values. Fix later somehow.
             // transaction.srem( entityRemovalKey, commandKey );
-            
-            // For future deletion of the index
-            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     },
     single_value
@@ -127,9 +122,6 @@ public enum IndexType
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, key, value );
             pipeline.del( keyValueKey, "" + id );
-            
-            // For future deletion of the index
-            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     };
     
