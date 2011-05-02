@@ -120,6 +120,7 @@ public class TestSingleValueIndex
         assertNull( index.get( key, "2" ).getSingle() );
     }
     
+    @Ignore
     @Test
     public void canOnlyHaveOneValueEntityPerKeyValue() throws Exception
     {
@@ -169,14 +170,13 @@ public class TestSingleValueIndex
         Index<Node> index = nodeIndex( "speed" );
         beginTx();
         long t = System.currentTimeMillis();
-        for ( int i = 0; i < 1000000; i++ )
+        for ( int i = 0; i < 10000000; i++ )
         {
             Node entity = db.createNode();
             index.add( entity, "name", i );
             if ( i % 30000 == 0 )
             {
-                finishTx( true );
-                beginTx();
+                restartTx();
                 System.out.println( i );
             }
         }
@@ -188,7 +188,7 @@ public class TestSingleValueIndex
         int resultCount = 0;
         for ( int i = 0; i < count; i++ )
         {
-            for ( Node entity : index.get( "name", i*3 ) )
+            for ( Node entity : index.get( "name", i*300 ) )
             {
                 resultCount++;
             }

@@ -3,7 +3,6 @@ How to best delete an entire index?
 Test thread safety / thread sanity
 Sorting?
 Performance tests
-Different types of indexes: multiple, one-to-one, super-fast-ignore-delete-and-the-other-removal-methods
 Support compound queries with a syntax similar to what's used in Lucene index
 There might be an issue with querying the transactional state with the methods in RelationshipIndex, it doesn't have that information
 Support selecting databases probably as part of redis config parameters

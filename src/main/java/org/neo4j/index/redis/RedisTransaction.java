@@ -19,6 +19,7 @@
  */
 package org.neo4j.index.redis;
 
+import java.net.SocketTimeoutException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -40,7 +41,7 @@ import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.Transaction;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 class RedisTransaction extends KeyValueTransaction
 {
@@ -87,23 +88,26 @@ class RedisTransaction extends KeyValueTransaction
                 long id = kvCommand.getEntityId();
                 
                 // TODO Make the command apply itself instead of this if-else-thingie
-                if ( kvCommand instanceof KeyValueCommand.AddCommand )
+                if ( kvCommand instanceof AddCommand )
                 {
-                    indexType.add(pipeline, dataSource, identifier, (AddCommand) kvCommand);
+                    AddCommand addCommand = (AddCommand) kvCommand;
+                    indexType.add( pipeline, identifier, commandKey, commandValue, id,
+                            addCommand.getStartNode(), addCommand.getEndNode() );
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
                 {
                     if ( commandKey == null && commandValue == null )
                     {
-                        indexType.removeEntity(pipeline, this, dataSource, identifier, id);
+                        indexType.removeEntity( pipeline, this, identifier, id );
                     }
                     else if ( commandValue == null )
                     {
-                        indexType.removeEntityKey(pipeline, this, dataSource, identifier, commandKey, id);
+                        indexType.removeEntityKey( pipeline, this, identifier, commandKey, id );
                     }
                     else
                     {
-                        indexType.removeEntityKeyValue(pipeline, dataSource, identifier, commandKey, commandValue, id);
+                        indexType.removeEntityKeyValue( pipeline, identifier, commandKey,
+                                commandValue, id );
                     }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
@@ -149,6 +153,18 @@ class RedisTransaction extends KeyValueTransaction
         {
             pipeline.exec();
             pipeline.execute();
+        }
+        catch ( JedisConnectionException e )
+        {
+            if ( e.getCause() instanceof SocketTimeoutException )
+            {
+                // TODO Issue warning to log
+                System.out.println( "TODO log properly: Read timeout" );
+            }
+            else
+            {
+                throw e;
+            }
         }
         finally
         {
