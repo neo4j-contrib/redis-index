@@ -104,7 +104,6 @@ public enum IndexType
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, command.getKey(), command.getValue() );
             pipeline.set( keyValueKey, "" + command.getEntityId() );
-//            pipeline.sadd( dataSource.formRedisKeyForIndex( identifier ), keyValueKey );
             addRelationshipData( pipeline, dataSource, identifier, command );
         }
 
