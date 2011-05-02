@@ -22,7 +22,6 @@ package org.neo4j.index.redis;
 import static org.neo4j.index.redis.RedisDataSource.formRedisEndNodeKey;
 import static org.neo4j.index.redis.RedisDataSource.formRedisKeyForEntityAndKeyRemoval;
 import static org.neo4j.index.redis.RedisDataSource.formRedisKeyForEntityRemoval;
-import static org.neo4j.index.redis.RedisDataSource.formRedisKeyForIndex;
 import static org.neo4j.index.redis.RedisDataSource.formRedisKeyForKeyValue;
 import static org.neo4j.index.redis.RedisDataSource.formRedisStartNodeKey;
 
@@ -50,12 +49,6 @@ public enum IndexType
             pipeline.sadd( entityAndKeyRemovalKey, value );
             pipeline.sadd( entityRemovalKey, key );
             
-            // For future deletion of the index
-            String indexKey = formRedisKeyForIndex( identifier );
-            pipeline.sadd( indexKey, keyValueKey );
-            pipeline.sadd( indexKey, entityAndKeyRemovalKey );
-            pipeline.sadd( indexKey, entityRemovalKey );
-
             // For relationship queries
             if ( identifier.getEntityType() == Relationship.class )
             {
@@ -75,7 +68,6 @@ public enum IndexType
                 removeEntityKey( pipeline, neo4jTransaction, identifier, key, id );
             }
             pipeline.del( entityRemovalKey );
-            pipeline.srem( identifier.getIndexName(), entityRemovalKey );
         }
 
         @Override
@@ -89,7 +81,6 @@ public enum IndexType
                 pipeline.srem( keyToRemove, "" + id );
             }
             pipeline.del( entityAndKeyRemovalKey );
-            pipeline.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
         }
 
         @Override
@@ -100,13 +91,10 @@ public enum IndexType
             String entityAndKeyRemovalKey = formRedisKeyForEntityAndKeyRemoval( identifier, key, id );
             pipeline.srem( keyValueKey, "" + id );
             pipeline.srem( entityAndKeyRemovalKey, value );
-            
+
             // TODO We cannot remove the key from the key set since we don't know
             // if there are more values. Fix later somehow.
             // transaction.srem( entityRemovalKey, commandKey );
-            
-            // For future deletion of the index
-            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     },
     single_value
@@ -117,7 +105,6 @@ public enum IndexType
         {
             String keyValueKey = formRedisKeyForKeyValue( identifier, key, value );
             pipeline.set( keyValueKey, "" + id );
-            pipeline.sadd( formRedisKeyForIndex( identifier ), keyValueKey );
         }
 
         @Override
@@ -140,9 +127,6 @@ public enum IndexType
         {
             String keyValueKey = formRedisKeyForKeyValue( identifier, key, value );
             pipeline.del( keyValueKey, "" + id );
-            
-            // For future deletion of the index
-            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     };
     

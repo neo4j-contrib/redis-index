@@ -193,6 +193,13 @@ public class RedisDataSource extends IndexDataSource
         return redisKeyStart( identifier ).append(KEY_DELIMITER)
                 .append("end").append(ID_DELIMITER).append(id).toString();
     }
+
+    // pattern to look up all the keys related to an index using the Redis "key" command
+    public String formRedisIndexPattern ( IndexIdentifier identifier )
+    {
+        return redisKeyStart( identifier ).append('[')
+                .append(KEY_DELIMITER).append(ID_DELIMITER).append("]*").toString() ;
+    }
     
     public IndexType getIndexType( IndexIdentifier identifier )
     {
