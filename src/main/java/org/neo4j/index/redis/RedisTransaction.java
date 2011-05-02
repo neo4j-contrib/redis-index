@@ -27,14 +27,15 @@ import java.util.Set;
 import javax.transaction.xa.XAException;
 
 import org.neo4j.graphdb.PropertyContainer;
-import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.AbstractCommand;
 import org.neo4j.index.base.AbstractIndex;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.TxData;
 import org.neo4j.index.base.keyvalue.KeyValueCommand;
+import org.neo4j.index.base.keyvalue.KeyValueCommand.AddCommand;
 import org.neo4j.index.base.keyvalue.KeyValueTransaction;
 import org.neo4j.index.base.keyvalue.KeyValueTxData;
+import org.neo4j.index.base.keyvalue.OneToOneTxData;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 
 import redis.clients.jedis.Jedis;
@@ -67,6 +68,7 @@ class RedisTransaction extends KeyValueTransaction
         for ( Map.Entry<IndexIdentifier, Collection<AbstractCommand>> entry : getCommands().entrySet() )
         {
             IndexIdentifier identifier = entry.getKey();
+            IndexType indexType = dataSource.getIndexType( identifier );
             
             for ( AbstractCommand command : entry.getValue() )
             {
@@ -86,22 +88,21 @@ class RedisTransaction extends KeyValueTransaction
                 // TODO Make the command apply itself instead of this if-else-thingie
                 if ( kvCommand instanceof KeyValueCommand.AddCommand )
                 {
-                    addEntityKeyValue( dataSource, identifier, kvCommand,
-                            commandKey, commandValue, id );
+                    indexType.add( transaction, dataSource, identifier, (AddCommand) kvCommand );
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
                 {
                     if ( commandKey == null && commandValue == null )
                     {
-                        deleteAllForEntity( dataSource, identifier, id );
+                        indexType.removeEntity( transaction, this, dataSource, identifier, id );
                     }
                     else if ( commandValue == null )
                     {
-                        deleteAllForEntityAndKey( dataSource, identifier, commandKey, id );
+                        indexType.removeEntityKey( transaction, this, dataSource, identifier, commandKey, id );
                     }
                     else
                     {
-                        deleteEntityKeyValue( dataSource, identifier, commandKey, commandValue, id );
+                        indexType.removeEntityKeyValue( transaction, dataSource, identifier, commandKey, commandValue, id );
                     }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
@@ -109,7 +110,7 @@ class RedisTransaction extends KeyValueTransaction
                     // TODO this doesn't really scale... getting all the keys for an
                     // index can potentially eat up the entire heap. Consider replacing with a list.
 
-                    for (String indexKey : getMembersFromOutsideTransaction( indexName ))
+                    for (String indexKey : getMembersFromOutsideTransaction( dataSource.formRedisKeyForIndex( identifier ) ))
                     {
                         transaction.del(indexKey);
                     }
@@ -120,73 +121,7 @@ class RedisTransaction extends KeyValueTransaction
         closeTxData();
     }
 
-    private void addEntityKeyValue( RedisDataSource dataSource, IndexIdentifier identifier,
-            KeyValueCommand kvCommand, String commandKey, String commandValue, long id )
-    {
-        String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, commandKey, commandValue );
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
-        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
-        
-        transaction.sadd( keyValueKey, "" + id );
-        transaction.sadd( entityAndKeyRemovalKey, commandValue );
-        transaction.sadd( entityRemovalKey, commandKey );
-        
-        // For future deletion of the index
-        String indexName = identifier.getIndexName();
-        transaction.sadd( indexName, keyValueKey );
-        transaction.sadd( indexName, entityAndKeyRemovalKey );
-        transaction.sadd( indexName, entityRemovalKey );
-
-        // For relationship queries
-        if (kvCommand.getIndexIdentifier().getEntityType() == Relationship.class)
-        {
-            transaction.sadd( dataSource.formRedisStartNodeKey(identifier, kvCommand.getStartNode()), "" + id );
-            transaction.sadd( dataSource.formRedisEndNodeKey(identifier, kvCommand.getEndNode()), "" + id );
-        }
-    }
-
-    private void deleteEntityKeyValue( RedisDataSource dataSource, IndexIdentifier identifier,
-            String commandKey, String commandValue, long id )
-    {
-        String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, commandKey, commandValue );
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
-        transaction.srem( keyValueKey, "" + id );
-        transaction.srem( entityAndKeyRemovalKey, commandValue );
-        
-        // TODO We cannot remove the key from the key set since we don't know
-        // if there are more values. Fix later somehow.
-        // transaction.srem( entityRemovalKey, commandKey );
-        
-        // For future deletion of the index
-        transaction.srem( identifier.getIndexName(), keyValueKey );
-    }
-
-    private void deleteAllForEntity( RedisDataSource dataSource, IndexIdentifier identifier, long id )
-    {
-        String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
-        Set<String> keys = getMembersFromOutsideTransaction( entityRemovalKey );
-        for ( String key : keys )
-        {
-            deleteAllForEntityAndKey( dataSource, identifier, key, id );
-        }
-        transaction.del( entityRemovalKey );
-        transaction.srem( identifier.getIndexName(), entityRemovalKey );
-    }
-
-    private void deleteAllForEntityAndKey( RedisDataSource dataSource, IndexIdentifier identifier, String commandKey,
-            long id )
-    {
-        String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, commandKey, id );
-        for ( String value : getMembersFromOutsideTransaction( entityAndKeyRemovalKey ) )
-        {
-            String keyToRemove = dataSource.formRedisKeyForKeyValue( identifier, commandKey, value );
-            transaction.srem( keyToRemove, "" + id );
-        }
-        transaction.del( entityAndKeyRemovalKey );
-        transaction.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
-    }
-
-    private Set<String> getMembersFromOutsideTransaction( String indexName )
+    Set<String> getMembersFromOutsideTransaction( String indexName )
     {
         readOnlyRedisResource = readOnlyRedisResource != null ?
                 readOnlyRedisResource : getDataSource().acquireResource();
@@ -202,6 +137,7 @@ class RedisTransaction extends KeyValueTransaction
     @Override
     protected void doCommit()
     {
+        // Needed during recovery only
         if ( isRecovered() )
         {
             acquireRedisTransaction();
@@ -213,8 +149,8 @@ class RedisTransaction extends KeyValueTransaction
         }
         finally
         {
-            getDataSource().releaseResource( redisResource );
-            releaseReadOnlyResourceIfNecessary();
+            releaseResourceIfNecessary( redisResource );
+            releaseResourceIfNecessary( readOnlyRedisResource );
         }
     }
 
@@ -224,12 +160,15 @@ class RedisTransaction extends KeyValueTransaction
         try
         {
             super.doRollback();
-            transaction.discard();
+            if ( transaction != null )
+            {
+                transaction.discard();
+            }
         }
         finally
         {
-            getDataSource().releaseResource( redisResource );
-            releaseReadOnlyResourceIfNecessary();
+            releaseResourceIfNecessary( redisResource );
+            releaseResourceIfNecessary( readOnlyRedisResource );
         }
     }
     
@@ -246,12 +185,19 @@ class RedisTransaction extends KeyValueTransaction
         Collection<Long> orphans = ((KeyValueTxData)removed).getOrphans( key );
         return merge( ids, orphans );
     }
-
-    private void releaseReadOnlyResourceIfNecessary()
+    
+    @Override
+    protected TxData newTxData( IndexIdentifier identifier, TxDataType txDataType )
     {
-        if ( readOnlyRedisResource != null )
+        return txDataType == TxDataType.ADD && getDataSource().getIndexType( identifier ) == IndexType.single_value ?
+            new OneToOneTxData() : super.newTxData( identifier, txDataType );
+    }
+
+    private void releaseResourceIfNecessary( Jedis resource )
+    {
+        if ( resource != null )
         {
-            getDataSource().releaseResource( readOnlyRedisResource );
+            getDataSource().releaseResource( resource );
         }
     }
 }

@@ -1,13 +1,8 @@
-Support stuff in RelationshipIndex
-Remove neo4j logical log (in favor of redis only)?
 Pipeline instead of transaction
 How to best delete an entire index?
-Support remove(entity,key) and remove(entity)
-Flushall before test?
 Test thread safety / thread sanity
 Sorting?
 Performance tests
-Redis configuration: host, port, user, pwd
 Different types of indexes: multiple, one-to-one, super-fast-ignore-delete-and-the-other-removal-methods
 Support compound queries with a syntax similar to what's used in Lucene index
 There might be an issue with querying the transactional state with the methods in RelationshipIndex, it doesn't have that information

@@ -28,7 +28,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
 import static org.neo4j.index.redis.Contains.contains;
 
 import java.io.File;
@@ -49,12 +48,13 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.index.Index;
 import org.neo4j.graphdb.index.IndexHits;
+import org.neo4j.graphdb.index.IndexManager;
 import org.neo4j.graphdb.index.RelationshipIndex;
 import org.neo4j.helpers.collection.IteratorUtil;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.kernel.EmbeddedGraphDatabase;
 
-public class TestRedisIndex
+public class TestMultiValueIndex
 {
     private static GraphDatabaseService graphDb;
     private Transaction tx;
@@ -83,11 +83,6 @@ public class TestRedisIndex
         finishTx( true );
     }
     
-    private void rollbackTx()
-    {
-        finishTx( false );
-    }
-
     public void finishTx( boolean success )
     {
         if ( tx != null )
@@ -553,8 +548,7 @@ public class TestRedisIndex
         Index<Node> nodeIndex = nodeIndex( indexName );
         beginTx();
         assertEquals( indexName, nodeIndex.getName() );
-        assertEquals( stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ),
-                graphDb.index().getConfiguration( nodeIndex ) );
+        assertEquals( Neo4jTestCase.REDIS_CONFIG, graphDb.index().getConfiguration( nodeIndex ) );
     }
     
     @Test
@@ -591,13 +585,13 @@ public class TestRedisIndex
         Index<Node> index = nodeIndex( "conf-index" );
         try
         {
-            graphDb.index().setConfiguration( index, "provider", "something" );
+            graphDb.index().setConfiguration( index, IndexManager.PROVIDER, "something" );
             fail( "Shouldn't be able to modify provider" );
         }
         catch ( IllegalArgumentException e ) { /* Good*/ }
         try
         {
-            graphDb.index().removeConfiguration( index, "provider" );
+            graphDb.index().removeConfiguration( index, IndexManager.PROVIDER );
             fail( "Shouldn't be able to modify provider" );
         }
         catch ( IllegalArgumentException e ) { /* Good*/ }
@@ -618,7 +612,7 @@ public class TestRedisIndex
     public void testSomeStuff() throws Exception
     {
         String indexName = "" + currentTimeMillis();
-        Index<Node> index = graphDb.index().forNodes( indexName, stringMap( "provider", RedisIndexImplementation.SERVICE_NAME ) );
+        Index<Node> index = nodeIndex( indexName );
         
         beginTx();
         Node node1 = graphDb.createNode();

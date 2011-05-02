@@ -25,7 +25,9 @@ import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.index.Index;
+import org.neo4j.graphdb.index.IndexManager;
 import org.neo4j.graphdb.index.RelationshipIndex;
+import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.index.base.AbstractIndexImplementation;
 import org.neo4j.index.base.IndexDataSource;
 import org.neo4j.index.base.IndexIdentifier;
@@ -34,6 +36,13 @@ import org.neo4j.kernel.Config;
 public class RedisIndexImplementation extends AbstractIndexImplementation
 {
     public static final String SERVICE_NAME = "redis";
+    static final String DEFAULT_INDEX_TYPE = IndexType.single_value.name();
+    static final String CONFIG_KEY_TYPE = "type";
+    
+    public static final Map<String, String> SINGLE_VALUE = MapUtil.stringMap(
+            IndexManager.PROVIDER, SERVICE_NAME, CONFIG_KEY_TYPE, IndexType.single_value.name() );
+    public static final Map<String, String> MULTIPLE_VALUES = MapUtil.stringMap(
+            IndexManager.PROVIDER, SERVICE_NAME, CONFIG_KEY_TYPE, IndexType.multiple_values.name() );
     
     public RedisIndexImplementation( GraphDatabaseService db, Config config )
     {
@@ -43,14 +52,28 @@ public class RedisIndexImplementation extends AbstractIndexImplementation
     @Override
     public Index<Node> nodeIndex( String indexName, Map<String, String> config )
     {
-        return new RedisIndex.NodeIndex( this, new IndexIdentifier( Node.class, indexName ) );
+        IndexIdentifier identifier = new IndexIdentifier( Node.class, indexName );
+        IndexType type = dataSource().getIndexType( identifier );
+        switch ( type )
+        {
+        case multiple_values: return new RedisIndex.NodeIndex( this, identifier );
+        case single_value: return new RedisSingleValueIndex.NodeIndex( this, identifier );
+        default: throw new IllegalArgumentException( "" + type );
+        }
     }
 
     @Override
     public RelationshipIndex relationshipIndex( String indexName,
             Map<String, String> config )
     {
-        return new RedisIndex.RelationshipIndex( this, new IndexIdentifier( Relationship.class, indexName ) );
+        IndexIdentifier identifier = new IndexIdentifier( Relationship.class, indexName );
+        IndexType type = dataSource().getIndexType( identifier );
+        switch ( type )
+        {
+        case multiple_values: return new RedisIndex.RelationshipIndex( this, identifier );
+        case single_value: return new RedisSingleValueIndex.RelationshipIndex( this, identifier );
+        default: throw new IllegalArgumentException( "" + type );
+        }
     }
     
     @Override
@@ -62,6 +85,11 @@ public class RedisIndexImplementation extends AbstractIndexImplementation
     @Override
     public Map<String, String> fillInDefaults( Map<String, String> config )
     {
+        String type = config.get( CONFIG_KEY_TYPE );
+        if ( type == null )
+        {
+            config.put( CONFIG_KEY_TYPE, DEFAULT_INDEX_TYPE );
+        }
         return config;
     }
 
@@ -80,7 +108,9 @@ public class RedisIndexImplementation extends AbstractIndexImplementation
     @Override
     public boolean configMatches( Map<String, String> storedConfig, Map<String, String> config )
     {
-        return true;
+        String storedType = storedConfig.get( CONFIG_KEY_TYPE );
+        String customType = config.get( CONFIG_KEY_TYPE );
+        return storedType.equals( customType != null ? customType : DEFAULT_INDEX_TYPE );
     }
     
     @Override

@@ -19,9 +19,6 @@
  */
 package org.neo4j.index.redis;
 
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
-
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
@@ -34,7 +31,7 @@ public class Inserter
 	{
 		String path = args[0];
 		final GraphDatabaseService db = new EmbeddedGraphDatabase( path );
-		final Index<Node> index = db.index().forNodes( "myIndex", stringMap( "provider", SERVICE_NAME ) );
+		final Index<Node> index = Neo4jTestCase.nodeIndex( db, "myIndex" );
 		final String[] keys = new String[] { "apoc", "zion", "morpheus" };
 		final String[] values = new String[] { "hej", "yo", "something", "just a value", "anything" };
 		

@@ -60,9 +60,9 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
     }
     
     @Override
-    public IndexHits<T> get(String key, Object value) {
-        return read(new EntityGetCallback(key, value));
-
+    public IndexHits<T> get( String key, Object value )
+    {
+        return read( new EntityGetCallback( key, value ) );
     }
 
     protected abstract T idToEntity( Long id );

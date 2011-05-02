@@ -21,8 +21,6 @@ package org.neo4j.index.redis;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.SERVICE_NAME;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -46,7 +44,7 @@ public abstract class Neo4jTestCase
     private static GraphDatabaseService graphDb;
     private Transaction tx;
     
-    private static final Map<String, String> REDIS_CONFIG = stringMap( "provider", SERVICE_NAME );
+    static final Map<String, String> REDIS_CONFIG = RedisIndexImplementation.MULTIPLE_VALUES;
 
     @BeforeClass
     public static void setUpDb() throws Exception
@@ -54,21 +52,6 @@ public abstract class Neo4jTestCase
         deleteFileOrDirectory( dbPath );
         graphDb = new EmbeddedGraphDatabase( dbPath.getAbsolutePath() );
     }
-    
-//    @Before
-//    public void setUpTest()
-//    {
-//        tx = graphDb.beginTx();
-//    }
-    
-//    @After
-//    public void tearDownTest()
-//    {
-//        if ( !manageMyOwnTxFinish() )
-//        {
-//            finishTx( true );
-//        }
-//    }
     
     protected static Index<Node> nodeIndex( GraphDatabaseService db, String name )
     {

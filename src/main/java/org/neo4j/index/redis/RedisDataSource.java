@@ -66,7 +66,6 @@ public class RedisDataSource extends IndexDataSource
     static final int DEFAULT_PORT = 6379;
     static final int DEFAULT_TIMEOUT = 2000;
 
-
     private JedisPool db;
 
     /**
@@ -157,6 +156,11 @@ public class RedisDataSource extends IndexDataSource
         return new StringBuilder( entityType ).append( KEY_DELIMITER ).append( identifier.getIndexName() );
     }
 
+    public String formRedisKeyForIndex( IndexIdentifier identifier )
+    {
+        return redisKeyStart( identifier ).toString();
+    }
+    
     public String formRedisKeyForKeyValue( IndexIdentifier identifier, String key, String value )
     {
         return redisKeyStart( identifier ).append( KEY_DELIMITER ).append( key ).append( KEY_DELIMITER )
@@ -184,5 +188,12 @@ public class RedisDataSource extends IndexDataSource
     {
         return redisKeyStart( identifier ).append(KEY_DELIMITER)
                 .append("end").append(ID_DELIMITER).append(id).toString();
+    }
+    
+    public IndexType getIndexType( IndexIdentifier identifier )
+    {
+        // TODO optimize... by a cache maybe?
+        Map<String, String> config = getIndexStore().get( identifier.getEntityType(), identifier.getIndexName() );
+        return IndexType.valueOf( config.get( "type" ) );
     }
 }
