@@ -25,13 +25,15 @@ import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.keyvalue.KeyValueCommand.AddCommand;
 
+import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Transaction;
 
 public enum IndexType
 {
     multiple_values
     {
-        public void add( Transaction transaction, RedisDataSource dataSource,
+        @Override
+        public void add( Pipeline pipeline, RedisDataSource dataSource,
                 IndexIdentifier identifier, AddCommand command )
         {
             String commandKey = command.getKey();
@@ -42,123 +44,123 @@ public enum IndexType
                     identifier, commandKey, id );
             String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
             
-            transaction.sadd( keyValueKey, "" + id );
-            transaction.sadd( entityAndKeyRemovalKey, commandValue );
-            transaction.sadd( entityRemovalKey, commandKey );
+            pipeline.sadd( keyValueKey, "" + id );
+            pipeline.sadd( entityAndKeyRemovalKey, commandValue );
+            pipeline.sadd( entityRemovalKey, commandKey );
             
             // For future deletion of the index
             String indexKey = dataSource.formRedisKeyForIndex( identifier );
-            transaction.sadd( indexKey, keyValueKey );
-            transaction.sadd( indexKey, entityAndKeyRemovalKey );
-            transaction.sadd( indexKey, entityRemovalKey );
+            pipeline.sadd( indexKey, keyValueKey );
+            pipeline.sadd( indexKey, entityAndKeyRemovalKey );
+            pipeline.sadd( indexKey, entityRemovalKey );
 
-            addRelationshipData( transaction, dataSource, identifier, command );
+            addRelationshipData( pipeline, dataSource, identifier, command );
         }
 
         @Override
-        public void removeEntity( Transaction transaction, RedisTransaction neo4jTransaction,
+        public void removeEntity( Pipeline pipeline, RedisTransaction neo4jTransaction,
                 RedisDataSource dataSource, IndexIdentifier identifier, long id )
         {
             String entityRemovalKey = dataSource.formRedisKeyForEntityRemoval( identifier, id );
             Set<String> keys = neo4jTransaction.getMembersFromOutsideTransaction( entityRemovalKey );
             for ( String key : keys )
             {
-                removeEntityKey( transaction, neo4jTransaction, dataSource, identifier, key, id );
+                removeEntityKey( pipeline, neo4jTransaction, dataSource, identifier, key, id );
             }
-            transaction.del( entityRemovalKey );
-            transaction.srem( identifier.getIndexName(), entityRemovalKey );
+            pipeline.del( entityRemovalKey );
+            pipeline.srem( identifier.getIndexName(), entityRemovalKey );
         }
 
         @Override
-        public void removeEntityKey( Transaction transaction, RedisTransaction neo4jTransaction,
+        public void removeEntityKey( Pipeline pipeline, RedisTransaction neo4jTransaction,
                 RedisDataSource dataSource, IndexIdentifier identifier, String key, long id )
         {
             String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, key, id );
             for ( String value : neo4jTransaction.getMembersFromOutsideTransaction( entityAndKeyRemovalKey ) )
             {
                 String keyToRemove = dataSource.formRedisKeyForKeyValue( identifier, key, value );
-                transaction.srem( keyToRemove, "" + id );
+                pipeline.srem( keyToRemove, "" + id );
             }
-            transaction.del( entityAndKeyRemovalKey );
-            transaction.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
+            pipeline.del( entityAndKeyRemovalKey );
+            pipeline.srem( identifier.getIndexName(), entityAndKeyRemovalKey );
         }
 
         @Override
-        public void removeEntityKeyValue( Transaction transaction, RedisDataSource dataSource,
+        public void removeEntityKeyValue( Pipeline pipeline, RedisDataSource dataSource,
                 IndexIdentifier identifier, String key, String value, long id )
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, key, value );
             String entityAndKeyRemovalKey = dataSource.formRedisKeyForEntityAndKeyRemoval( identifier, key, id );
-            transaction.srem( keyValueKey, "" + id );
-            transaction.srem( entityAndKeyRemovalKey, value );
+            pipeline.srem( keyValueKey, "" + id );
+            pipeline.srem( entityAndKeyRemovalKey, value );
             
             // TODO We cannot remove the key from the key set since we don't know
             // if there are more values. Fix later somehow.
             // transaction.srem( entityRemovalKey, commandKey );
             
             // For future deletion of the index
-            transaction.srem( identifier.getIndexName(), keyValueKey );
+            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     },
     single_value
     {
         @Override
-        public void add( Transaction transaction, RedisDataSource dataSource,
+        public void add( Pipeline pipeline, RedisDataSource dataSource,
                 IndexIdentifier identifier, AddCommand command )
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, command.getKey(), command.getValue() );
-            transaction.set( keyValueKey, "" + command.getEntityId() );
-            transaction.sadd( dataSource.formRedisKeyForIndex( identifier ), keyValueKey );
-            addRelationshipData( transaction, dataSource, identifier, command );
+            pipeline.set( keyValueKey, "" + command.getEntityId() );
+            pipeline.sadd( dataSource.formRedisKeyForIndex( identifier ), keyValueKey );
+            addRelationshipData( pipeline, dataSource, identifier, command );
         }
 
         @Override
-        public void removeEntity( Transaction transaction, RedisTransaction neo4jTransaction,
+        public void removeEntity( Pipeline pipeline, RedisTransaction neo4jTransaction,
                 RedisDataSource dataSource, IndexIdentifier identifier, long id )
         {
             throw new UnsupportedOperationException( "Not supported for one-to-one index type" );
         }
 
         @Override
-        public void removeEntityKey( Transaction transaction, RedisTransaction neo4jTransaction,
+        public void removeEntityKey( Pipeline pipeline, RedisTransaction neo4jTransaction,
                 RedisDataSource dataSource, IndexIdentifier identifier, String key, long id )
         {
             throw new UnsupportedOperationException( "Not supported for one-to-one index type" );
         }
 
         @Override
-        public void removeEntityKeyValue( Transaction transaction, RedisDataSource dataSource, IndexIdentifier identifier,
+        public void removeEntityKeyValue( Pipeline pipeline, RedisDataSource dataSource, IndexIdentifier identifier,
                 String key, String value, long id )
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, key, value );
-            transaction.del( keyValueKey, "" + id );
+            pipeline.del( keyValueKey, "" + id );
             
             // For future deletion of the index
-            transaction.srem( identifier.getIndexName(), keyValueKey );
+            pipeline.srem( identifier.getIndexName(), keyValueKey );
         }
     };
     
-    public abstract void add( Transaction transaction, RedisDataSource dataSource,
+    public abstract void add( Pipeline pipeline, RedisDataSource dataSource,
             IndexIdentifier identifier, AddCommand command );
     
-    public abstract void removeEntity( Transaction transaction, RedisTransaction neo4jTransaction,
+    public abstract void removeEntity( Pipeline pipeline, RedisTransaction neo4jTransaction,
             RedisDataSource dataSource, IndexIdentifier identifier, long id );
 
-    public abstract void removeEntityKey( Transaction transaction, RedisTransaction neo4jTransaction,
+    public abstract void removeEntityKey( Pipeline pipeline, RedisTransaction neo4jTransaction,
             RedisDataSource dataSource, IndexIdentifier identifier, String key, long id );
 
-    public abstract void removeEntityKeyValue( Transaction transaction, RedisDataSource dataSource,
+    public abstract void removeEntityKeyValue( Pipeline pipeline, RedisDataSource dataSource,
             IndexIdentifier identifier, String key, String value, long id );
 
-    private static void addRelationshipData( Transaction transaction, RedisDataSource dataSource,
+    private static void addRelationshipData( Pipeline pipeline, RedisDataSource dataSource,
             IndexIdentifier identifier, AddCommand command )
     {
         // For relationship queries
         if (command.getIndexIdentifier().getEntityType() == Relationship.class)
         {
             long id = command.getEntityId();
-            transaction.sadd( dataSource.formRedisStartNodeKey(identifier, command.getStartNode()), "" + id );
-            transaction.sadd( dataSource.formRedisEndNodeKey(identifier, command.getEndNode()), "" + id );
+            pipeline.sadd( dataSource.formRedisStartNodeKey(identifier, command.getStartNode()), "" + id );
+            pipeline.sadd( dataSource.formRedisEndNodeKey(identifier, command.getEndNode()), "" + id );
         }
     }
 }

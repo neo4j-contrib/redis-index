@@ -39,12 +39,13 @@ import org.neo4j.index.base.keyvalue.OneToOneTxData;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Transaction;
 
 class RedisTransaction extends KeyValueTransaction
 {
     private Jedis redisResource;
-    private Transaction transaction;
+    private Pipeline pipeline;
     private Jedis readOnlyRedisResource;
     
     RedisTransaction( int identifier, XaLogicalLog xaLog,
@@ -68,7 +69,7 @@ class RedisTransaction extends KeyValueTransaction
         for ( Map.Entry<IndexIdentifier, Collection<AbstractCommand>> entry : getCommands().entrySet() )
         {
             IndexIdentifier identifier = entry.getKey();
-            IndexType indexType = dataSource.getIndexType( identifier );
+            IndexType indexType = dataSource.getIndexType(identifier);
             
             for ( AbstractCommand command : entry.getValue() )
             {
@@ -88,21 +89,21 @@ class RedisTransaction extends KeyValueTransaction
                 // TODO Make the command apply itself instead of this if-else-thingie
                 if ( kvCommand instanceof KeyValueCommand.AddCommand )
                 {
-                    indexType.add( transaction, dataSource, identifier, (AddCommand) kvCommand );
+                    indexType.add(pipeline, dataSource, identifier, (AddCommand) kvCommand);
                 }
                 else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
                 {
                     if ( commandKey == null && commandValue == null )
                     {
-                        indexType.removeEntity( transaction, this, dataSource, identifier, id );
+                        indexType.removeEntity(pipeline, this, dataSource, identifier, id);
                     }
                     else if ( commandValue == null )
                     {
-                        indexType.removeEntityKey( transaction, this, dataSource, identifier, commandKey, id );
+                        indexType.removeEntityKey(pipeline, this, dataSource, identifier, commandKey, id);
                     }
                     else
                     {
-                        indexType.removeEntityKeyValue( transaction, dataSource, identifier, commandKey, commandValue, id );
+                        indexType.removeEntityKeyValue(pipeline, dataSource, identifier, commandKey, commandValue, id);
                     }
                 }
                 else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
@@ -112,9 +113,9 @@ class RedisTransaction extends KeyValueTransaction
 
                     for (String indexKey : getMembersFromOutsideTransaction( dataSource.formRedisKeyForIndex( identifier ) ))
                     {
-                        transaction.del(indexKey);
+                        pipeline.del(indexKey);
                     }
-                    transaction.del(indexName);
+                    pipeline.del(indexName);
                 }
             }
         }
@@ -131,7 +132,8 @@ class RedisTransaction extends KeyValueTransaction
     private void acquireRedisTransaction( )
     {
         redisResource = getDataSource().acquireResource();
-        transaction = redisResource.multi();
+        pipeline = redisResource.pipelined();
+        pipeline.multi();
     }
     
     @Override
@@ -145,7 +147,8 @@ class RedisTransaction extends KeyValueTransaction
         
         try
         {
-            transaction.exec();
+            pipeline.exec();
+            pipeline.execute();
         }
         finally
         {
@@ -160,9 +163,10 @@ class RedisTransaction extends KeyValueTransaction
         try
         {
             super.doRollback();
-            if ( transaction != null )
+            if ( pipeline != null )
             {
-                transaction.discard();
+                pipeline.discard();
+                pipeline.execute();
             }
         }
         finally
