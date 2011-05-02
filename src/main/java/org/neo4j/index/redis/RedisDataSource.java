@@ -152,7 +152,7 @@ public class RedisDataSource extends IndexDataSource
 
     private StringBuilder redisKeyStart( IndexIdentifier identifier )
     {
-        char entityType = identifier.getEntityType().equals( Node.class ) ? 'n' : 'r';
+        String entityType = identifier.getEntityType().equals( Node.class ) ? "n" : "r";
         return new StringBuilder( entityType ).append( KEY_DELIMITER ).append( identifier.getIndexName() );
     }
 
@@ -188,6 +188,13 @@ public class RedisDataSource extends IndexDataSource
     {
         return redisKeyStart( identifier ).append(KEY_DELIMITER)
                 .append("end").append(ID_DELIMITER).append(id).toString();
+    }
+
+    // pattern to look up all the keys related to an index using the Redis "key" command
+    public String formRedisIndexPattern ( IndexIdentifier identifier )
+    {
+        return new StringBuilder(formRedisKeyForIndex(identifier)).append('[')
+                .append(KEY_DELIMITER).append(ID_DELIMITER).append("]*").toString() ;
     }
     
     public IndexType getIndexType( IndexIdentifier identifier )

@@ -48,12 +48,6 @@ public enum IndexType
             pipeline.sadd( entityAndKeyRemovalKey, commandValue );
             pipeline.sadd( entityRemovalKey, commandKey );
             
-            // For future deletion of the index
-            String indexKey = dataSource.formRedisKeyForIndex( identifier );
-            pipeline.sadd( indexKey, keyValueKey );
-            pipeline.sadd( indexKey, entityAndKeyRemovalKey );
-            pipeline.sadd( indexKey, entityRemovalKey );
-
             addRelationshipData( pipeline, dataSource, identifier, command );
         }
 
@@ -110,7 +104,7 @@ public enum IndexType
         {
             String keyValueKey = dataSource.formRedisKeyForKeyValue( identifier, command.getKey(), command.getValue() );
             pipeline.set( keyValueKey, "" + command.getEntityId() );
-            pipeline.sadd( dataSource.formRedisKeyForIndex( identifier ), keyValueKey );
+//            pipeline.sadd( dataSource.formRedisKeyForIndex( identifier ), keyValueKey );
             addRelationshipData( pipeline, dataSource, identifier, command );
         }
 

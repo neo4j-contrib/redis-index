@@ -106,27 +106,30 @@ class RedisTransaction extends KeyValueTransaction
                         indexType.removeEntityKeyValue(pipeline, dataSource, identifier, commandKey, commandValue, id);
                     }
                 }
-                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand )
-                {
-                    // TODO this doesn't really scale... getting all the keys for an
-                    // index can potentially eat up the entire heap. Consider replacing with a list.
-
-                    for (String indexKey : getMembersFromOutsideTransaction( dataSource.formRedisKeyForIndex( identifier ) ))
-                    {
-                        pipeline.del(indexKey);
+                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand ) {
+                    Set<String> keys = getKeysFromOutsideTransaction(identifier);
+                    if (!keys.isEmpty()) {
+                        pipeline.del(keys.toArray(new String[keys.size()]));
                     }
-                    pipeline.del(indexName);
                 }
             }
         }
         closeTxData();
     }
 
+    Set<String> getKeysFromOutsideTransaction( IndexIdentifier identifier )
+    {
+        readOnlyRedisResource = readOnlyRedisResource != null ?
+                readOnlyRedisResource : getDataSource().acquireResource();
+        String pattern = getDataSource().formRedisIndexPattern(identifier);
+        return readOnlyRedisResource.keys(pattern);
+    }
+
     Set<String> getMembersFromOutsideTransaction( String indexName )
     {
         readOnlyRedisResource = readOnlyRedisResource != null ?
                 readOnlyRedisResource : getDataSource().acquireResource();
-        return readOnlyRedisResource.smembers( indexName );
+        return readOnlyRedisResource.smembers(indexName);
     }
 
     private void acquireRedisTransaction( )
