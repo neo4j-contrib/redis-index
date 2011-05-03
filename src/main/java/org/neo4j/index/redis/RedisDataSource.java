@@ -65,8 +65,13 @@ public class RedisDataSource extends IndexDataSource
     static final String DEFAULT_HOST = "localhost";
     static final int DEFAULT_PORT = 6379;
     static final int DEFAULT_TIMEOUT = 2000;
+    static final int DEFAULT_DATABASE = 0;
 
     private JedisPool db;
+
+    // the target Redis database numeric index
+    // needs to be static because newJedisPool is called from a static context in the batch inserter
+    private static int targetDatabase;
 
     /**
      * Constructs this data source.
@@ -95,6 +100,9 @@ public class RedisDataSource extends IndexDataSource
         Integer port = ParamsUtil.getInt(params, REDIS_PREFIX + "port", DEFAULT_PORT);
         Integer timeout = ParamsUtil.getInt(params, REDIS_PREFIX + "timeout", DEFAULT_TIMEOUT);
         String password = ParamsUtil.getString(params, REDIS_PREFIX + "password");
+
+        // selected database
+        targetDatabase = ParamsUtil.getInt(params, REDIS_PREFIX + "database", DEFAULT_DATABASE);
 
         // connection pool parameters
         Integer poolMaxIdle = ParamsUtil.getInt(params, REDIS_POOL_PREFIX + "maxIdle");
@@ -154,15 +162,20 @@ public class RedisDataSource extends IndexDataSource
         db.returnResource( resource );
     }
 
+    public static int getTargetDatabase()
+    {
+        return targetDatabase;
+    }
+
     private static StringBuilder redisKeyStart( IndexIdentifier identifier )
     {
         String entityType = identifier.getEntityType().equals( Node.class ) ? "n" : "r";
-        return new StringBuilder( entityType ).append( KEY_DELIMITER ).append( identifier.getIndexName() );
+        return new StringBuilder( entityType ).append(KEY_DELIMITER).append(identifier.getIndexName());
     }
 
     public static String formRedisKeyForIndex( IndexIdentifier identifier )
     {
-        return redisKeyStart( identifier ).toString();
+        return redisKeyStart(identifier).toString();
     }
     
     public static String formRedisKeyForKeyValue( IndexIdentifier identifier, String key, String value )
@@ -174,12 +187,12 @@ public class RedisDataSource extends IndexDataSource
     public static String formRedisKeyForEntityAndKeyRemoval( IndexIdentifier identifier, String key, long id )
     {
         return redisKeyStart( identifier ).append( KEY_DELIMITER )
-                .append( key ).append( ID_DELIMITER ).append( id ).toString();
+                .append(key).append( ID_DELIMITER ).append( id ).toString();
     }
 
     public static String formRedisKeyForEntityRemoval( IndexIdentifier identifier, long id )
     {
-        return redisKeyStart( identifier ).append( ID_DELIMITER ).append( id ).toString();
+        return redisKeyStart(identifier).append( ID_DELIMITER ).append( id ).toString();
     }
 
     public static String formRedisStartNodeKey( IndexIdentifier identifier, long id)
@@ -205,7 +218,7 @@ public class RedisDataSource extends IndexDataSource
     {
         // TODO optimize... by a cache maybe?
         Map<String, String> config = getIndexStore().get( identifier.getEntityType(), identifier.getIndexName() );
-        return getIndexType( config );
+        return getIndexType(config);
     }
     
     public static IndexType getIndexType( Map<String, String> config )

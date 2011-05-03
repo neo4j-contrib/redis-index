@@ -65,6 +65,7 @@ public class TestMultiValueIndex
         String storeDir = "target/var/db";
         Neo4jTestCase.deleteFileOrDirectory( new File( storeDir ) );
         Map<String, String> params = new HashMap<String, String>();
+        params.put("index.redis.database", "1");
         params.put("index.redis.password", "123");
         params.put("index.redis.timeout", "3000");
         params.put("index.redis.pool.maxIdle", "5");

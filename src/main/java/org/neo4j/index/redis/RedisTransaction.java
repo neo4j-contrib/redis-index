@@ -139,6 +139,14 @@ class RedisTransaction extends KeyValueTransaction
     private void acquireRedisTransaction( )
     {
         redisResource = getDataSource().acquireResource();
+        
+        // select the target database before starting the pipeline
+        int targetDatabase = RedisDataSource.getTargetDatabase();
+        if (targetDatabase != RedisDataSource.DEFAULT_DATABASE)
+        {
+            redisResource.select(targetDatabase);
+        }
+
         pipeline = redisResource.pipelined();
         pipeline.multi();
     }
