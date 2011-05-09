@@ -28,15 +28,17 @@ import java.util.Set;
 import javax.transaction.xa.XAException;
 
 import org.neo4j.graphdb.PropertyContainer;
-import org.neo4j.index.base.AbstractCommand;
 import org.neo4j.index.base.AbstractIndex;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.TxData;
-import org.neo4j.index.base.keyvalue.KeyValueCommand;
-import org.neo4j.index.base.keyvalue.KeyValueCommand.AddCommand;
 import org.neo4j.index.base.keyvalue.KeyValueTransaction;
 import org.neo4j.index.base.keyvalue.KeyValueTxData;
 import org.neo4j.index.base.keyvalue.OneToOneTxData;
+import org.neo4j.kernel.impl.index.IndexCommand;
+import org.neo4j.kernel.impl.index.IndexCommand.AddCommand;
+import org.neo4j.kernel.impl.index.IndexCommand.AddRelationshipCommand;
+import org.neo4j.kernel.impl.index.IndexCommand.RemoveCommand;
+import org.neo4j.kernel.impl.index.IndexDefineCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 
 import redis.clients.jedis.Jedis;
@@ -67,34 +69,49 @@ class RedisTransaction extends KeyValueTransaction
         super.doPrepare();
         RedisDataSource dataSource = getDataSource();
         acquireRedisTransaction();
-        for ( Map.Entry<IndexIdentifier, Collection<AbstractCommand>> entry : getCommands().entrySet() )
+        IndexDefineCommand definitions = getDefinitions( false );
+        for ( Map.Entry<IndexIdentifier, Collection<IndexCommand>> entry : getCommands().entrySet() )
         {
             IndexIdentifier identifier = entry.getKey();
             IndexType indexType = dataSource.getIndexType(identifier);
             
-            for ( AbstractCommand command : entry.getValue() )
+            for ( IndexCommand command : entry.getValue() )
             {
                 String indexName = identifier.getIndexName();
-                if ( command instanceof KeyValueCommand.CreateIndexCommand )
+                if ( command instanceof IndexCommand.CreateCommand )
                 {
                     dataSource.getIndexStore().setIfNecessary( identifier.getEntityType(),
-                            indexName, ((KeyValueCommand.CreateIndexCommand) command).getConfig() );
+                            indexName, ((IndexCommand.CreateCommand) command).getConfig() );
+                    continue;
+                }
+                else if ( command instanceof IndexCommand.DeleteCommand )
+                {
+                    Set<String> keys = getKeysFromOutsideTransaction( identifier );
+                    if ( !keys.isEmpty() )
+                    {
+                        pipeline.del( keys.toArray( new String[keys.size()] ) );
+                    }
                     continue;
                 }
                 
-                KeyValueCommand kvCommand = (KeyValueCommand) command;
-                String commandKey = kvCommand.getKey();
-                String commandValue = kvCommand.getValue();
-                long id = kvCommand.getEntityId();
+                IndexCommand indexCommand = (IndexCommand) command;
+                byte keyId = indexCommand.getKeyId();
+                String commandKey = keyId > 0 ? definitions.getKey( keyId ) : null;
+                Object commandValue = indexCommand.getValue();
+                long id = indexCommand.getEntityId();
                 
                 // TODO Make the command apply itself instead of this if-else-thingie
-                if ( kvCommand instanceof AddCommand )
+                if ( indexCommand instanceof AddCommand )
                 {
-                    AddCommand addCommand = (AddCommand) kvCommand;
-                    indexType.add( pipeline, identifier, commandKey, commandValue, id,
+                    indexType.add( pipeline, identifier, commandKey, commandValue.toString(), id, 0, 0 );
+                }
+                else if ( indexCommand instanceof AddRelationshipCommand )
+                {
+                    AddRelationshipCommand addCommand = (AddRelationshipCommand) indexCommand;
+                    indexType.add( pipeline, identifier, commandKey, commandValue.toString(), id,
                             addCommand.getStartNode(), addCommand.getEndNode() );
                 }
-                else if ( kvCommand instanceof KeyValueCommand.RemoveCommand )
+                else if ( indexCommand instanceof RemoveCommand )
                 {
                     if ( commandKey == null && commandValue == null )
                     {
@@ -107,14 +124,12 @@ class RedisTransaction extends KeyValueTransaction
                     else
                     {
                         indexType.removeEntityKeyValue( pipeline, identifier, commandKey,
-                                commandValue, id );
+                                commandValue.toString(), id );
                     }
                 }
-                else if ( kvCommand instanceof KeyValueCommand.DeleteIndexCommand ) {
-                    Set<String> keys = getKeysFromOutsideTransaction(identifier);
-                    if (!keys.isEmpty()) {
-                        pipeline.del(keys.toArray(new String[keys.size()]));
-                    }
+                else
+                {
+                    throw new IllegalArgumentException( "Unknown command " + indexCommand );
                 }
             }
         }

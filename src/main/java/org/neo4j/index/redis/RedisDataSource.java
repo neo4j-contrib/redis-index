@@ -19,9 +19,6 @@
  */
 package org.neo4j.index.redis;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.util.Map;
 
 import org.apache.commons.pool.impl.GenericObjectPool;
@@ -30,8 +27,6 @@ import org.neo4j.graphdb.Relationship;
 import org.neo4j.index.base.IndexDataSource;
 import org.neo4j.index.base.IndexIdentifier;
 import org.neo4j.index.base.ParamsUtil;
-import org.neo4j.index.base.keyvalue.KeyValueCommand;
-import org.neo4j.kernel.impl.transaction.xaframework.XaCommand;
 import org.neo4j.kernel.impl.transaction.xaframework.XaDataSource;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 import org.neo4j.kernel.impl.transaction.xaframework.XaTransaction;
@@ -139,13 +134,6 @@ public class RedisDataSource extends IndexDataSource
         return new RedisTransaction( identifier, logicalLog, this );
     }
     
-    @Override
-    protected XaCommand readCommand( ReadableByteChannel channel, ByteBuffer buffer )
-            throws IOException
-    {
-        return KeyValueCommand.readCommand( channel, buffer, this );
-    }
-
     @Override
     protected void flushAll()
     {

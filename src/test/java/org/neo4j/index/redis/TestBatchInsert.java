@@ -3,7 +3,7 @@ package org.neo4j.index.redis;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.index.redis.RedisIndexImplementation.MULTIPLE_VALUES;
+import static org.neo4j.index.redis.RedisIndexImplementation.SINGLE_VALUE;
 
 import java.io.File;
 import java.util.Map;
@@ -32,21 +32,20 @@ public class TestBatchInsert
         long testId = 0;
         try
         {
-            BatchInserterIndex index = provider.nodeIndex( indexName, MULTIPLE_VALUES );
-            for ( int i = 0; i < 1000000; i++ )
+            BatchInserterIndex index = provider.nodeIndex( indexName, SINGLE_VALUE );
+            for ( int i = 0; i < 100000; i++ )
             {
                 Map<String, Object> properties = MapUtil.map( "name", "Node " + i );
                 long node = inserter.createNode( properties );
                 index.add( node, properties );
                 if ( i == 55555 ) testId = node;
-                if ( i%100000 == 0 ) System.out.println( i );
             }
             
             int resultCount = 0;
             long t = System.currentTimeMillis();
             for ( int i = 0; i < 1000; i++ )
             {
-                if ( index.get( "name", "Node " + i*500 ).getSingle() != null )
+                if ( index.get( "name", "Node " + i*50 ).getSingle() != null )
                 {
                     resultCount++;
                 }

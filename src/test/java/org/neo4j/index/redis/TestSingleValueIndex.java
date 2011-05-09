@@ -173,7 +173,7 @@ public class TestSingleValueIndex
         {
             Node entity = db.createNode();
             index.add( entity, "name", i );
-            if ( i % 30000 == 0 )
+            if ( i % 50000 == 0 )
             {
                 restartTx();
                 System.out.println( i );
@@ -183,11 +183,11 @@ public class TestSingleValueIndex
         System.out.println( "insert:" + ( System.currentTimeMillis() - t ) );
 
         t = System.currentTimeMillis();
-        int count = 100000;
+        int count = 10000;
         int resultCount = 0;
         for ( int i = 0; i < count; i++ )
         {
-            for ( Node entity : index.get( "name", i*300 ) )
+            for ( Node entity : index.get( "name", i*50 ) )
             {
                 resultCount++;
             }
