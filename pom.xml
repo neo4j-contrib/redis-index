@@ -5,6 +5,11 @@
     <groupId>org.neo4j</groupId>
     <version>21</version>
   </parent>
+
+  <properties>
+    <bundle.namespace>org.neo4j.index.redis</bundle.namespace>
+  </properties>
+
   <groupId>org.neo4j</groupId>
   <artifactId>neo4j-redis-index</artifactId>
   <version>0.1-SNAPSHOT</version>
