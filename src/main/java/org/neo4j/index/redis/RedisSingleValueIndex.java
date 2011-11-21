@@ -64,6 +64,12 @@ public abstract class RedisSingleValueIndex<T extends PropertyContainer> extends
             dataSource.releaseResource( resource );
         }
     }
+    
+    @Override
+    public boolean isWriteable()
+    {
+        return true;
+    }
 
     static class NodeIndex extends RedisSingleValueIndex<Node>
     {

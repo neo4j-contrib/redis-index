@@ -65,6 +65,12 @@ public abstract class RedisIndex<T extends PropertyContainer> extends KeyValueIn
         return read( new EntityGetCallback( key, value ) );
     }
 
+    @Override
+    public boolean isWriteable()
+    {
+        return true;
+    }
+
     protected abstract T idToEntity( Long id );
     
     abstract class AbstractReadCallback extends ReadCallback
